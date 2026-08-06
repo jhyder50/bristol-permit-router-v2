@@ -1,0 +1,32 @@
+:root {
+  font-family: Arial, Helvetica, sans-serif;
+  color: #1f2937;
+  background: #d8c9aa;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; background: #d8c9aa; }
+body { min-height: 100vh; }
+#router-status {
+  min-height: 0;
+  padding: 0;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2937;
+}
+#router-status:not(:empty) { padding: 12px; }
+#router-status.error { color: #991b1b; background: #fee2e2; }
+#formDiv.hidden { visibility: hidden; height: 0; min-height: 0; overflow: hidden; }
+
+
+#formDiv {
+  width: 100%;
+  margin: 0;
+}
+
+#formDiv iframe {
+  display: block;
+  width: 100% !important;
+  min-height: 900px;
+  border: 0;
+}
