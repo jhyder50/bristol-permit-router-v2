@@ -43,6 +43,7 @@
     const route = validRoute(value);
     if (!route) return "";
     selectedRoute = route;
+    answers.deptype = route;
     answers.dep_permit_type = route;
     sessionStorage.setItem("bristolPermitRoute", route);
     return route;
@@ -77,7 +78,7 @@
     const value = normalizeScalar(extractFieldValue(data));
     answers[field] = value;
 
-    if (field === "dep_permit_type") {
+    if (field === "deptype" || field === "dep_permit_type") {
       const route = rememberRoute(value);
       console.log("Bristol router department selected:", route || value, data);
     }
@@ -88,7 +89,7 @@
 
     const allowedFields = new Set([
       "GlobalID", "globalid", "globalId",
-      "handoff_id", "prjNumber", "dep_permit_type",
+      "handoff_id", "prjNumber", "deptype", "dep_permit_type",
       "project", "description", "propstartdt", "propenddt",
       "appname", "appcompany", "appaddr", "appcity", "appstate",
       "appzip", "appphone", "appemail", "license",
@@ -136,13 +137,18 @@
       if (!node || typeof node !== "object" || depth > 6 || seen.has(node)) return "";
       seen.add(node);
 
+      if (Object.prototype.hasOwnProperty.call(node, "deptype")) {
+        const found = validRoute(node.deptype);
+        if (found) return found;
+      }
+
       if (Object.prototype.hasOwnProperty.call(node, "dep_permit_type")) {
         const found = validRoute(node.dep_permit_type);
         if (found) return found;
       }
 
       const field = extractFieldName(node);
-      if (field === "dep_permit_type") {
+      if (field === "deptype" || field === "dep_permit_type") {
         const found = validRoute(extractFieldValue(node));
         if (found) return found;
       }
@@ -155,6 +161,7 @@
     }
 
     const foundRoute =
+      validRoute(answers.deptype) ||
       validRoute(answers.dep_permit_type) ||
       findDepartment(source);
 
@@ -378,6 +385,7 @@
     await readCurrentFormValues();
 
     const routeKey =
+      validRoute(answers.deptype) ||
       validRoute(answers.dep_permit_type) ||
       validRoute(selectedRoute) ||
       validRoute(sessionStorage.getItem("bristolPermitRoute"));
@@ -459,7 +467,10 @@
       onQuestionValueChanged: handleQuestionChanged,
       onFormSubmit: async () => {
         await readCurrentFormValues();
-        const route = validRoute(answers.dep_permit_type) || validRoute(selectedRoute);
+        const route =
+          validRoute(answers.deptype) ||
+          validRoute(answers.dep_permit_type) ||
+          validRoute(selectedRoute);
         setStatus(route ? `Submitting ${config.routes[route].label} intake…` : "Submitting application…");
       },
       onFormSubmitted: routeAfterSubmission,
@@ -481,7 +492,10 @@
     if (typeof webform.setOnFormSubmit === "function") {
       webform.setOnFormSubmit(async () => {
         await readCurrentFormValues();
-        const route = validRoute(answers.dep_permit_type) || validRoute(selectedRoute);
+        const route =
+          validRoute(answers.deptype) ||
+          validRoute(answers.dep_permit_type) ||
+          validRoute(selectedRoute);
         setStatus(route ? `Submitting ${config.routes[route].label} intake…` : "Submitting application…");
       });
     }
