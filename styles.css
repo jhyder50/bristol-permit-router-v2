@@ -1,10 +1,10 @@
 :root {
   font-family: Arial, Helvetica, sans-serif;
   color: #1f2937;
-  background: #d8c9aa;
+  background: #0E1B49;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; min-height: 100%; background: #d8c9aa; }
+html, body { margin: 0; min-height: 100%; background: #0E1B49; }
 body { min-height: 100vh; }
 #router-status {
   min-height: 0;
@@ -30,10 +30,12 @@ body { min-height: 100vh; }
 #formDiv {
   width: 100%;
   margin: 0;
+  background: #0E1B49;
 }
 #formDiv iframe {
   display: block;
   width: 100% !important;
   min-height: 900px;
   border: 0;
+  background: #0E1B49;
 }
