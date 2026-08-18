@@ -453,12 +453,11 @@
 
     webform = new Survey123WebForm({
       container: "formDiv",
-      clientId: "qo3W5ymZkpyWwyOT",
       itemId: config.mainSurveyItemId,
       version: "latest",
       portalUrl: config.portalUrl,
       width: 1,
-      hideElements: ["navbar", "footer"],
+      hideElements: ["navbar", "header", "footer"],
       onFormLoaded: (data) => {
         setStatus("");
         resizeEmbeddedForm(data);
