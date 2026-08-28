@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Collections Scheduled Work</title>
+<style>
+:root{--border:#5f6368;--soft:#f3f4f6;--text:#111827;--muted:#5f6368;--accent:#1f5f99}
+*{box-sizing:border-box}
+body{margin:0;padding:18px;font-family:Arial,Helvetica,sans-serif;color:var(--text);background:#fff;font-size:14px}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:0 0 14px;padding:12px;border:1px solid #c7c7c7;border-radius:8px;background:var(--soft)}
+label{display:flex;flex-direction:column;gap:4px;font-weight:600}
+select,input,button{font:inherit;min-height:38px;padding:7px 10px}
+button{cursor:pointer;border:1px solid #777;border-radius:6px;background:#fff}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button:disabled{opacity:.55;cursor:not-allowed}
+.custom-range{display:none;gap:10px;align-items:end}
+h1{margin:0 0 4px;font-size:24px}
+.meta{color:var(--muted);margin-bottom:8px}
+.auth{margin-bottom:10px;font-weight:600}
+.status{margin:8px 0 12px;min-height:20px;font-weight:600}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+thead{display:table-header-group}
+th,td{border:1px solid var(--border);padding:6px 7px;vertical-align:top;overflow-wrap:anywhere}
+th{background:#e7e7e7;text-align:left}
+th:nth-child(1),td:nth-child(1){width:16%}
+th:nth-child(2),td:nth-child(2){width:11%}
+th:nth-child(3),td:nth-child(3){width:15%}
+th:nth-child(4),td:nth-child(4){width:10%;white-space:nowrap}
+th:nth-child(5),td:nth-child(5){width:13%}
+th:nth-child(6),td:nth-child(6){width:9%}
+th:nth-child(7),td:nth-child(7){width:26%}
+tr{break-inside:avoid}
+@page{size:landscape;margin:.35in}
+@media print{body{padding:0;font-size:10pt}.toolbar,.status,.auth{display:none!important}h1{font-size:18pt}.table-wrap{overflow:visible}}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <label>Scheduled Date
+    <select id="rangePreset">
+      <option value="today">Today</option>
+      <option value="last7">Last 7 Days</option>
+      <option value="last30">Last 30 Days</option>
+      <option value="custom">Custom Date Range</option>
+      <option value="all" selected>All</option>
+    </select>
+  </label>
+
+  <div id="customRange" class="custom-range">
+    <label>From<input type="date" id="fromDate"></label>
+    <label>To<input type="date" id="toDate"></label>
+  </div>
+
+  <button type="button" id="signInBtn" class="primary">Sign in to ArcGIS</button>
+  <button type="button" id="refreshBtn" disabled>Refresh Schedule</button>
+  <button type="button" id="printBtn" disabled>Print Schedule</button>
+  <button type="button" id="signOutBtn" disabled>Sign Out</button>
+</div>
+
+<h1>Collections Scheduled Work</h1>
+<div id="auth" class="auth">Not signed in.</div>
+<div id="meta" class="meta"></div>
+<div id="status" class="status" aria-live="polite"></div>
+
+<div class="table-wrap">
+<table>
+<thead><tr>
+<th>Address</th>
+<th>Request Type</th>
+<th>Activity Requested</th>
+<th>Scheduled Date</th>
+<th>Can Number(s)</th>
+<th>Collection Day</th>
+<th>Notes</th>
+</tr></thead>
+<tbody id="tbody"><tr><td colspan="7">Sign in to load the live schedule.</td></tr></tbody>
+</table>
+</div>
+
+<script>
+(() => {
+  const CLIENT_ID = "qo3W5ymZkpyWwyOT";
+  const PORTAL = "https://www.arcgis.com";
+  const AUTHORIZE = PORTAL + "/sharing/rest/oauth2/authorize";
+  const TOKEN_URL = PORTAL + "/sharing/rest/oauth2/token";
+
+  const SERVICE_ROOT =
+    "https://services9.arcgis.com/Vhoecg08noPQ7wRF/arcgis/rest/services/Collections_ServiceLocationsV3/FeatureServer";
+
+  const ACTIVITY_URL = SERVICE_ROOT + "/1";
+  const SERVICE_LOCATION_URL = SERVICE_ROOT + "/0";
+  const REDIRECT_URI = "https://jhyder50.github.io/bristol-permit-router-v2/collections_schedule_oauth.html";
+
+  const ACTIVITY_FIELDS = [
+    "OBJECTID","coll_id","parentglobalid","location_address","location_address2",
+    "activity_class","activity_type","scheduled_date","can_nums","co_can",
+    "dayofweek","note","activity_status","co_status"
+  ].join(",");
+
+  const PARENT_FIELDS = [
+    "OBJECTID","coll_id","GlobalID","location_address","location_address_orig",
+    "can_nums","dayofweek"
+  ].join(",");
+
+  const $=id=>document.getElementById(id);
+  const rangePreset=$("rangePreset"),customRange=$("customRange");
+  const fromDate=$("fromDate"),toDate=$("toDate");
+  const signInBtn=$("signInBtn"),signOutBtn=$("signOutBtn");
+  const refreshBtn=$("refreshBtn"),printBtn=$("printBtn");
+  const tbody=$("tbody"),meta=$("meta"),status=$("status"),auth=$("auth");
+
+  let accessToken=sessionStorage.getItem("collections_oauth_access_token")||"";
+  let expiresAt=Number(sessionStorage.getItem("collections_oauth_expires_at")||"0");
+  let username=sessionStorage.getItem("collections_oauth_username")||"";
+
+  function clean(v){return v==null?"":String(v).trim()}
+  function normGuid(v){return clean(v).replace(/[{}]/g,"").toLowerCase()}
+  function esc(v){return clean(v).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;").replaceAll("\n","<br>")}
+  function isoLocal(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`}
+  function todayIso(){return isoLocal(new Date())}
+  function daysAgoIso(n){const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-n);return isoLocal(d)}
+  function displayIso(iso){if(!iso)return"";const p=iso.split("-");return p.length===3?`${p[1]}/${p[2]}/${p[0]}`:iso}
+  function arcDate(ms){if(ms==null||ms==="")return"";const d=new Date(Number(ms));return Number.isNaN(d.getTime())?"":isoLocal(d)}
+
+  function randomString(len=64){
+    const chars="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+    const a=new Uint32Array(len);crypto.getRandomValues(a);
+    return Array.from(a,x=>chars[x%chars.length]).join("");
+  }
+
+  function base64url(buf){
+    return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/ ,"");
+  }
+
+  async function challenge(verifier){
+    return base64url(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(verifier)));
+  }
+
+  function setAuthUI(){
+    const signed=!!accessToken;
+    signInBtn.disabled=signed;signOutBtn.disabled=!signed;refreshBtn.disabled=!signed;printBtn.disabled=!signed;
+    auth.textContent=signed?`Signed in to ArcGIS${username?" as "+username:""}.`:"Not signed in.";
+  }
+
+  function saveToken(data){
+    accessToken=data.access_token||"";
+    username=data.username||username||"";
+    expiresAt=Date.now()+((Number(data.expires_in)||1800)*1000)-30000;
+    sessionStorage.setItem("collections_oauth_access_token",accessToken);
+    sessionStorage.setItem("collections_oauth_username",username);
+    sessionStorage.setItem("collections_oauth_expires_at",String(expiresAt));
+    setAuthUI();
+  }
+
+  function clearTokens(){
+    accessToken="";username="";expiresAt=0;
+    ["collections_oauth_access_token","collections_oauth_username","collections_oauth_expires_at","collections_pkce_verifier","collections_oauth_state"].forEach(k=>sessionStorage.removeItem(k));
+    setAuthUI();
+  }
+
+  async function beginLogin(){
+    const verifier=randomString(64),state=randomString(32);
+    sessionStorage.setItem("collections_pkce_verifier",verifier);
+    sessionStorage.setItem("collections_oauth_state",state);
+    const params=new URLSearchParams({
+      client_id:CLIENT_ID,response_type:"code",redirect_uri:REDIRECT_URI,
+      code_challenge:await challenge(verifier),code_challenge_method:"S256",state
+    });
+    window.location.assign(AUTHORIZE+"?"+params.toString());
+  }
+
+  async function exchangeCode(code){
+    const verifier=sessionStorage.getItem("collections_pkce_verifier")||"";
+    if(!verifier)throw new Error("PKCE verifier is missing.");
+    const body=new URLSearchParams({
+      f:"json",client_id:CLIENT_ID,grant_type:"authorization_code",
+      redirect_uri:REDIRECT_URI,code,code_verifier:verifier
+    });
+    const r=await fetch(TOKEN_URL,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body});
+    const data=await r.json();
+    if(data.error)throw new Error(data.error_description||data.error.message||JSON.stringify(data.error));
+    saveToken(data);
+    sessionStorage.removeItem("collections_pkce_verifier");
+    sessionStorage.removeItem("collections_oauth_state");
+  }
+
+  async function ensureToken(){
+    if(accessToken&&Date.now()<expiresAt)return true;
+    clearTokens();return false;
+  }
+
+  function getRange(){
+    const p=rangePreset.value;
+    if(p==="all")return{from:null,to:null,label:"All"};
+    if(p==="today"){const t=todayIso();return{from:t,to:t,label:"Today"}}
+    if(p==="last7")return{from:daysAgoIso(6),to:todayIso(),label:"Last 7 Days"};
+    if(p==="last30")return{from:daysAgoIso(29),to:todayIso(),label:"Last 30 Days"};
+    return{from:fromDate.value||null,to:toDate.value||null,label:"Custom Date Range"};
+  }
+
+  function makeWhere(r){
+    const c=["scheduled_date IS NOT NULL","activity_status = 'Scheduled'"];
+    if(r.from)c.push(`scheduled_date >= DATE '${r.from} 00:00:00'`);
+    if(r.to){const d=new Date(r.to+"T00:00:00");d.setDate(d.getDate()+1);c.push(`scheduled_date < DATE '${isoLocal(d)} 00:00:00'`)}
+    return c.join(" AND ");
+  }
+
+  async function queryLayer(url,obj){
+    const params=new URLSearchParams({f:"json",token:accessToken,...obj});
+    const resp=await fetch(url+"/query?"+params.toString());
+    const data=await resp.json();
+    if(data.error){
+      if(data.error.code===498||data.error.code===499){clearTokens();throw new Error("ArcGIS session expired. Sign in again.")}
+      throw new Error(data.error.message||JSON.stringify(data.error));
+    }
+    return Array.isArray(data.features)?data.features:[];
+  }
+
+  async function parentMapFor(activityFeatures){
+    const gids=[...new Set(activityFeatures.map(f=>normGuid((f.attributes||{}).parentglobalid)).filter(Boolean))];
+    const map=new Map();
+    for(let i=0;i<gids.length;i+=100){
+      const chunk=gids.slice(i,i+100);
+      const vals=chunk.map(g=>`'${g.replaceAll("'","''")}'`);
+      const fs=await queryLayer(SERVICE_LOCATION_URL,{
+        where:`GlobalID IN (${vals.join(",")})`,
+        outFields:PARENT_FIELDS,
+        returnGeometry:"false",
+        resultRecordCount:"2000"
+      });
+      fs.forEach(f=>{
+        const a=f.attributes||{};
+        map.set(normGuid(a.GlobalID),a);
+      });
+    }
+    return map;
+  }
+
+  function bestAddress(a,p){
+    return clean(a.location_address)||clean(a.location_address2)||clean(p&&p.location_address)||clean(p&&p.location_address_orig);
+  }
+
+  function bestCans(a,p){
+    const vals=[];
+    [a.can_nums,a.co_can,p&&p.can_nums].forEach(v=>{
+      const s=clean(v);if(s&&!vals.includes(s))vals.push(s);
+    });
+    return vals.join(", ");
+  }
+
+  function bestDay(a,p){
+    return clean(a.dayofweek)||clean(p&&p.dayofweek);
+  }
+
+  async function loadSchedule(){
+    const r=getRange();
+    if(rangePreset.value==="custom"){
+      if(!r.from||!r.to){status.textContent="Choose both From and To dates.";return}
+      if(r.from>r.to){status.textContent="The From date cannot be after the To date.";return}
+    }
+    if(!await ensureToken()){status.textContent="Sign in to ArcGIS to load the schedule.";return}
+
+    status.textContent="Loading live schedule and service details…";
+
+    const activities=await queryLayer(ACTIVITY_URL,{
+      where:makeWhere(r),
+      outFields:ACTIVITY_FIELDS,
+      returnGeometry:"false",
+      orderByFields:"scheduled_date ASC, location_address2 ASC",
+      resultRecordCount:"2000"
+    });
+
+    const parents=await parentMapFor(activities);
+
+    const rows=activities.map(f=>{
+      const a=f.attributes||{};
+      const p=parents.get(normGuid(a.parentglobalid))||{};
+      return{
+        address:bestAddress(a,p),
+        requestType:clean(a.activity_class),
+        activity:clean(a.activity_type),
+        scheduled:displayIso(arcDate(a.scheduled_date)),
+        cans:bestCans(a,p),
+        day:bestDay(a,p),
+        notes:clean(a.note)
+      };
+    });
+
+    tbody.innerHTML=rows.length?rows.map(x=>`<tr>
+      <td>${esc(x.address)}</td>
+      <td>${esc(x.requestType)}</td>
+      <td>${esc(x.activity)}</td>
+      <td>${esc(x.scheduled)}</td>
+      <td>${esc(x.cans)}</td>
+      <td>${esc(x.day)}</td>
+      <td>${esc(x.notes)}</td>
+    </tr>`).join(""):'<tr><td colspan="7">No scheduled records found for this date range.</td></tr>';
+
+    const rangeText=!r.from&&!r.to?"All scheduled records":r.from===r.to?`${r.label}: ${displayIso(r.from)}`:`${r.label}: ${displayIso(r.from)} - ${displayIso(r.to)}`;
+    meta.textContent=`${rangeText} | Records: ${rows.length}`;
+
+    const missingAddress=rows.filter(x=>!clean(x.address)).length;
+    const missingType=rows.filter(x=>!clean(x.requestType)).length;
+    const missingCans=rows.filter(x=>!clean(x.cans)).length;
+    const missingDay=rows.filter(x=>!clean(x.day)).length;
+    status.textContent=(missingAddress||missingType||missingCans||missingDay)
+      ? `Remaining blanks — Address: ${missingAddress}, Request Type: ${missingType}, Can Number(s): ${missingCans}, Collection Day: ${missingDay}`
+      : "";
+  }
+
+  async function handleCallback(){
+    const q=new URLSearchParams(location.search);
+    const code=q.get("code"),returnedState=q.get("state");
+    if(!code)return false;
+    const expected=sessionStorage.getItem("collections_oauth_state");
+    if(!expected||returnedState!==expected)throw new Error("OAuth state validation failed.");
+    status.textContent="Completing ArcGIS sign-in…";
+    await exchangeCode(code);
+    history.replaceState({},document.title,REDIRECT_URI);
+    await loadSchedule();
+    return true;
+  }
+
+  rangePreset.addEventListener("change",()=>{
+    customRange.style.display=rangePreset.value==="custom"?"flex":"none";
+    if(accessToken&&rangePreset.value!=="custom")loadSchedule().catch(e=>status.textContent=e.message);
+  });
+
+  signInBtn.addEventListener("click",()=>beginLogin().catch(e=>status.textContent=e.message));
+  signOutBtn.addEventListener("click",()=>{
+    clearTokens();
+    tbody.innerHTML='<tr><td colspan="7">Sign in to load the live schedule.</td></tr>';
+    meta.textContent="";status.textContent="";
+  });
+  refreshBtn.addEventListener("click",()=>loadSchedule().catch(e=>status.textContent="Live ArcGIS query failed: "+e.message));
+  printBtn.addEventListener("click",()=>window.print());
+
+  setAuthUI();
+  handleCallback().then(done=>{
+    if(!done&&accessToken)loadSchedule().catch(e=>status.textContent=e.message);
+  }).catch(e=>{
+    clearTokens();status.textContent="ArcGIS sign-in failed: "+e.message;
+  });
+})();
+</script>
+</body>
+</html>
