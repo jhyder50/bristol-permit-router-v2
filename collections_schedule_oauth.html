@@ -228,6 +228,29 @@ tr{break-inside:avoid}
     }
     return Array.isArray(data.features)?data.features:[];
   }
+  async function queryDistinct(url,field){
+    const fs=await queryLayer(url,{
+      where:`${field} IS NOT NULL`,
+      outFields:field,
+      returnDistinctValues:"true",
+      returnGeometry:"false",
+      orderByFields:`${field} ASC`,
+      resultRecordCount:"2000"
+    });
+    return fs.map(f=>clean((f.attributes||{})[field])).filter(Boolean);
+  }
+  async function loadFilterChoices(){
+    const [requestTypes,accountTypes,collectionDays,activityTypes]=await Promise.all([
+      queryDistinct(ACTIVITY_URL,"activity_class"),
+      queryDistinct(SERVICE_LOCATION_URL,"account_type"),
+      queryDistinct(SERVICE_LOCATION_URL,"dayofweek"),
+      queryDistinct(ACTIVITY_URL,"activity_type")
+    ]);
+    populateSelect(requestTypeFilter,requestTypes);
+    populateSelect(accountTypeFilter,accountTypes);
+    populateSelect(collectionDayFilter,collectionDays);
+    populateSelect(activityTypeFilter,activityTypes);
+  }
   async function parentMapFor(activityFeatures){
     const gids=[...new Set(activityFeatures.map(f=>normGuid((f.attributes||{}).parentglobalid)).filter(Boolean))];
     const map=new Map();
@@ -289,9 +312,12 @@ tr{break-inside:avoid}
       if(r.from>r.to){status.textContent="The From date cannot be after the To date.";return}
     }
     if(!await ensureToken()){status.textContent="Sign in to ArcGIS to load the schedule.";return}
-    status.textContent="Loading live schedule and service details…";
+    status.textContent="Loading live schedule, filters, and service details…";
 
-    const activities=await queryLayer(ACTIVITY_URL,{where:makeWhere(r),outFields:ACTIVITY_FIELDS,returnGeometry:"false",orderByFields:"scheduled_date ASC, location_address2 ASC",resultRecordCount:"2000"});
+    const [activities]=await Promise.all([
+      queryLayer(ACTIVITY_URL,{where:makeWhere(r),outFields:ACTIVITY_FIELDS,returnGeometry:"false",orderByFields:"scheduled_date ASC, location_address2 ASC",resultRecordCount:"2000"}),
+      loadFilterChoices()
+    ]);
     const parents=await parentMapFor(activities);
 
     allRows=activities.map(f=>{
@@ -307,11 +333,6 @@ tr{break-inside:avoid}
         notes:clean(a.note)
       };
     });
-
-    populateSelect(requestTypeFilter,allRows.map(r=>r.requestType));
-    populateSelect(accountTypeFilter,allRows.map(r=>r.accountType));
-    populateSelect(collectionDayFilter,allRows.map(r=>r.day));
-    populateSelect(activityTypeFilter,allRows.map(r=>r.activity));
 
     currentRangeLabel=!r.from&&!r.to?"All scheduled records":r.from===r.to?`${r.label}: ${displayIso(r.from)}`:`${r.label}: ${displayIso(r.from)} - ${displayIso(r.to)}`;
     status.textContent="";
