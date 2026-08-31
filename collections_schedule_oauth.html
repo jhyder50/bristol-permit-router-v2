@@ -8,8 +8,8 @@
 :root{--border:#5f6368;--soft:#f3f4f6;--text:#111827;--muted:#5f6368;--accent:#1f5f99}
 *{box-sizing:border-box}
 body{margin:0;padding:18px;font-family:Arial,Helvetica,sans-serif;color:var(--text);background:#fff;font-size:14px}
-.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:0 0 10px;padding:12px;border:1px solid #c7c7c7;border-radius:8px;background:var(--soft)}
-.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:0 0 10px;padding:12px;border:1px solid #c7c7c7;border-radius:8px;background:#fafafa}
+.toolbar,.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:0 0 10px;padding:12px;border:1px solid #c7c7c7;border-radius:8px;background:var(--soft)}
+.filters{background:#fafafa}
 label{display:flex;flex-direction:column;gap:4px;font-weight:600}
 select,input,button{font:inherit;min-height:38px;padding:7px 10px}
 select{min-width:150px}
@@ -22,6 +22,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .fields-panel.open{display:block}
 .fields-panel label{display:flex;flex-direction:row;align-items:center;gap:8px;font-weight:400;margin:5px 0}
 .fields-panel input{min-height:auto;padding:0}
+.diag{align-self:center;font-size:12px;color:#555;padding-bottom:3px}
 h1{margin:0 0 4px;font-size:24px}
 .meta{color:var(--muted);margin-bottom:8px}
 .auth{margin-bottom:10px;font-weight:600}
@@ -33,17 +34,10 @@ th,td{border:1px solid var(--border);padding:6px 7px;vertical-align:top;overflow
 th{background:#e7e7e7;text-align:left}
 tr{break-inside:avoid}
 @page{size:landscape;margin:.35in}
-@media print{
- body{padding:0;font-size:10pt}
- .toolbar,.filters,.status,.auth{display:none!important}
- h1{font-size:18pt}
- .table-wrap{overflow:visible}
- table{table-layout:auto}
-}
+@media print{body{padding:0;font-size:10pt}.toolbar,.filters,.status,.auth,.diag{display:none!important}h1{font-size:18pt}.table-wrap{overflow:visible}}
 </style>
 </head>
 <body>
-
 <div class="toolbar">
   <label>Scheduled Date
     <select id="rangePreset">
@@ -54,74 +48,46 @@ tr{break-inside:avoid}
       <option value="all" selected>All</option>
     </select>
   </label>
-
   <div id="customRange" class="custom-range">
     <label>From<input type="date" id="fromDate"></label>
     <label>To<input type="date" id="toDate"></label>
   </div>
-
   <button type="button" id="signInBtn" class="primary">Sign in to ArcGIS</button>
   <button type="button" id="refreshBtn" disabled>Refresh Schedule</button>
   <button type="button" id="printBtn" disabled>Print Schedule</button>
   <button type="button" id="signOutBtn" disabled>Sign Out</button>
-
   <div class="fields-wrap">
     <button type="button" id="fieldsBtn">Fields to Show ▾</button>
     <div id="fieldsPanel" class="fields-panel"></div>
   </div>
 </div>
-
 <div class="filters">
-  <label>Request Type
-    <select id="requestTypeFilter"><option value="">All</option></select>
-  </label>
-  <label>Account Type
-    <select id="accountTypeFilter"><option value="">All</option></select>
-  </label>
-  <label>Collection Day
-    <select id="collectionDayFilter"><option value="">All</option></select>
-  </label>
-  <label>Activity Type
-    <select id="activityTypeFilter"><option value="">All</option></select>
-  </label>
+  <label>Request Type<select id="requestTypeFilter"><option value="">All</option></select></label>
+  <label>Account Type<select id="accountTypeFilter"><option value="">All</option></select></label>
+  <label>Collection Day<select id="collectionDayFilter"><option value="">All</option></select></label>
+  <label>Activity Type<select id="activityTypeFilter"><option value="">All</option></select></label>
   <button type="button" id="clearFiltersBtn">Clear Filters</button>
+  <span id="filterDiag" class="diag">Build FILTER-3 · waiting for data</span>
 </div>
-
 <h1>Collections Scheduled Work</h1>
 <div id="auth" class="auth">Not signed in.</div>
 <div id="meta" class="meta"></div>
 <div id="status" class="status" aria-live="polite"></div>
-
-<div class="table-wrap">
-<table>
-<thead id="thead"></thead>
-<tbody id="tbody"><tr><td>Sign in to load the live schedule.</td></tr></tbody>
-</table>
-</div>
-
+<div class="table-wrap"><table><thead id="thead"></thead><tbody id="tbody"><tr><td>Sign in to load the live schedule.</td></tr></tbody></table></div>
 <script>
 (() => {
-  const CLIENT_ID = "qo3W5ymZkpyWwyOT";
-  const PORTAL = "https://www.arcgis.com";
-  const AUTHORIZE = PORTAL + "/sharing/rest/oauth2/authorize";
-  const TOKEN_URL = PORTAL + "/sharing/rest/oauth2/token";
-  const SERVICE_ROOT = "https://services9.arcgis.com/Vhoecg08noPQ7wRF/arcgis/rest/services/Collections_ServiceLocationsV3/FeatureServer";
-  const ACTIVITY_URL = SERVICE_ROOT + "/1";
-  const SERVICE_LOCATION_URL = SERVICE_ROOT + "/0";
-  const REDIRECT_URI = "https://jhyder50.github.io/bristol-permit-router-v2/collections_schedule_oauth.html";
-
-  const ACTIVITY_FIELDS = [
-    "OBJECTID","coll_id","parentglobalid","location_address","location_address2",
-    "activity_class","activity_type","scheduled_date","can_nums","co_can",
-    "dayofweek","account_type","note","activity_status","co_status"
-  ].join(",");
-
-  const PARENT_FIELDS = [
-    "OBJECTID","coll_id","GlobalID","location_address","location_address_orig",
-    "can_nums","dayofweek","account_type"
-  ].join(",");
-
-  const COLUMN_DEFS = [
+  const BUILD="FILTER-3";
+  const CLIENT_ID="qo3W5ymZkpyWwyOT";
+  const PORTAL="https://www.arcgis.com";
+  const AUTHORIZE=PORTAL+"/sharing/rest/oauth2/authorize";
+  const TOKEN_URL=PORTAL+"/sharing/rest/oauth2/token";
+  const SERVICE_ROOT="https://services9.arcgis.com/Vhoecg08noPQ7wRF/arcgis/rest/services/Collections_ServiceLocationsV3/FeatureServer";
+  const ACTIVITY_URL=SERVICE_ROOT+"/1";
+  const SERVICE_LOCATION_URL=SERVICE_ROOT+"/0";
+  const REDIRECT_URI="https://jhyder50.github.io/bristol-permit-router-v2/collections_schedule_oauth.html";
+  const ACTIVITY_FIELDS=["OBJECTID","coll_id","parentglobalid","location_address","location_address2","activity_class","activity_type","scheduled_date","can_nums","co_can","dayofweek","account_type","note","activity_status","co_status"].join(",");
+  const PARENT_FIELDS=["OBJECTID","coll_id","GlobalID","location_address","location_address_orig","can_nums","dayofweek","account_type"].join(",");
+  const COLUMN_DEFS=[
     {key:"address",label:"Address",default:true},
     {key:"requestType",label:"Request Type",default:false},
     {key:"accountType",label:"Account Type",default:false},
@@ -131,23 +97,16 @@ tr{break-inside:avoid}
     {key:"day",label:"Collection Day",default:true},
     {key:"notes",label:"Notes",default:true}
   ];
-
   const $=id=>document.getElementById(id);
-  const rangePreset=$("rangePreset"),customRange=$("customRange");
-  const fromDate=$("fromDate"),toDate=$("toDate");
-  const signInBtn=$("signInBtn"),signOutBtn=$("signOutBtn");
-  const refreshBtn=$("refreshBtn"),printBtn=$("printBtn");
-  const fieldsBtn=$("fieldsBtn"),fieldsPanel=$("fieldsPanel");
-  const requestTypeFilter=$("requestTypeFilter"),accountTypeFilter=$("accountTypeFilter");
-  const collectionDayFilter=$("collectionDayFilter"),activityTypeFilter=$("activityTypeFilter");
-  const clearFiltersBtn=$("clearFiltersBtn");
+  const rangePreset=$("rangePreset"),customRange=$("customRange"),fromDate=$("fromDate"),toDate=$("toDate");
+  const signInBtn=$("signInBtn"),signOutBtn=$("signOutBtn"),refreshBtn=$("refreshBtn"),printBtn=$("printBtn");
+  const fieldsBtn=$("fieldsBtn"),fieldsPanel=$("fieldsPanel"),filterDiag=$("filterDiag");
+  const requestTypeFilter=$("requestTypeFilter"),accountTypeFilter=$("accountTypeFilter"),collectionDayFilter=$("collectionDayFilter"),activityTypeFilter=$("activityTypeFilter"),clearFiltersBtn=$("clearFiltersBtn");
   const thead=$("thead"),tbody=$("tbody"),meta=$("meta"),status=$("status"),auth=$("auth");
-
   let accessToken=sessionStorage.getItem("collections_oauth_access_token")||"";
   let expiresAt=Number(sessionStorage.getItem("collections_oauth_expires_at")||"0");
   let username=sessionStorage.getItem("collections_oauth_username")||"";
-  let allRows=[];
-  let currentRangeLabel="";
+  let allRows=[],currentRangeLabel="";
   let selectedFields=new Set(COLUMN_DEFS.filter(c=>c.default).map(c=>c.key));
 
   function clean(v){return v==null?"":String(v).trim()}
@@ -158,224 +117,41 @@ tr{break-inside:avoid}
   function daysAgoIso(n){const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-n);return isoLocal(d)}
   function displayIso(iso){if(!iso)return"";const p=iso.split("-");return p.length===3?`${p[1]}/${p[2]}/${p[0]}`:iso}
   function arcDate(ms){if(ms==null||ms==="")return"";const d=new Date(Number(ms));return Number.isNaN(d.getTime())?"":isoLocal(d)}
-
-  function randomString(len=64){
-    const chars="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
-    const a=new Uint32Array(len);crypto.getRandomValues(a);
-    return Array.from(a,x=>chars[x%chars.length]).join("");
-  }
+  function randomString(len=64){const chars="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";const a=new Uint32Array(len);crypto.getRandomValues(a);return Array.from(a,x=>chars[x%chars.length]).join("")}
   function base64url(buf){return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/ ,"")}
   async function challenge(verifier){return base64url(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(verifier)))}
-
-  function setAuthUI(){
-    const signed=!!accessToken;
-    signInBtn.disabled=signed;signOutBtn.disabled=!signed;refreshBtn.disabled=!signed;printBtn.disabled=!signed;
-    auth.textContent=signed?`Signed in to ArcGIS${username?" as "+username:""}.`:"Not signed in.";
-  }
-  function saveToken(data){
-    accessToken=data.access_token||"";username=data.username||username||"";
-    expiresAt=Date.now()+((Number(data.expires_in)||1800)*1000)-30000;
-    sessionStorage.setItem("collections_oauth_access_token",accessToken);
-    sessionStorage.setItem("collections_oauth_username",username);
-    sessionStorage.setItem("collections_oauth_expires_at",String(expiresAt));
-    setAuthUI();
-  }
-  function clearTokens(){
-    accessToken="";username="";expiresAt=0;
-    ["collections_oauth_access_token","collections_oauth_username","collections_oauth_expires_at","collections_pkce_verifier","collections_oauth_state"].forEach(k=>sessionStorage.removeItem(k));
-    setAuthUI();
-  }
-  async function beginLogin(){
-    const verifier=randomString(64),state=randomString(32);
-    sessionStorage.setItem("collections_pkce_verifier",verifier);
-    sessionStorage.setItem("collections_oauth_state",state);
-    const params=new URLSearchParams({client_id:CLIENT_ID,response_type:"code",redirect_uri:REDIRECT_URI,code_challenge:await challenge(verifier),code_challenge_method:"S256",state});
-    window.location.assign(AUTHORIZE+"?"+params.toString());
-  }
-  async function exchangeCode(code){
-    const verifier=sessionStorage.getItem("collections_pkce_verifier")||"";
-    if(!verifier)throw new Error("PKCE verifier is missing.");
-    const body=new URLSearchParams({f:"json",client_id:CLIENT_ID,grant_type:"authorization_code",redirect_uri:REDIRECT_URI,code,code_verifier:verifier});
-    const r=await fetch(TOKEN_URL,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body});
-    const data=await r.json();
-    if(data.error)throw new Error(data.error_description||data.error.message||JSON.stringify(data.error));
-    saveToken(data);
-    sessionStorage.removeItem("collections_pkce_verifier");sessionStorage.removeItem("collections_oauth_state");
-  }
+  function setAuthUI(){const signed=!!accessToken;signInBtn.disabled=signed;signOutBtn.disabled=!signed;refreshBtn.disabled=!signed;printBtn.disabled=!signed;auth.textContent=signed?`Signed in to ArcGIS${username?" as "+username:""}.`:"Not signed in."}
+  function saveToken(data){accessToken=data.access_token||"";username=data.username||username||"";expiresAt=Date.now()+((Number(data.expires_in)||1800)*1000)-30000;sessionStorage.setItem("collections_oauth_access_token",accessToken);sessionStorage.setItem("collections_oauth_username",username);sessionStorage.setItem("collections_oauth_expires_at",String(expiresAt));setAuthUI()}
+  function clearTokens(){accessToken="";username="";expiresAt=0;["collections_oauth_access_token","collections_oauth_username","collections_oauth_expires_at","collections_pkce_verifier","collections_oauth_state"].forEach(k=>sessionStorage.removeItem(k));setAuthUI()}
+  async function beginLogin(){const verifier=randomString(64),state=randomString(32);sessionStorage.setItem("collections_pkce_verifier",verifier);sessionStorage.setItem("collections_oauth_state",state);const params=new URLSearchParams({client_id:CLIENT_ID,response_type:"code",redirect_uri:REDIRECT_URI,code_challenge:await challenge(verifier),code_challenge_method:"S256",state});window.location.assign(AUTHORIZE+"?"+params.toString())}
+  async function exchangeCode(code){const verifier=sessionStorage.getItem("collections_pkce_verifier")||"";if(!verifier)throw new Error("PKCE verifier is missing.");const body=new URLSearchParams({f:"json",client_id:CLIENT_ID,grant_type:"authorization_code",redirect_uri:REDIRECT_URI,code,code_verifier:verifier});const r=await fetch(TOKEN_URL,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body});const data=await r.json();if(data.error)throw new Error(data.error_description||data.error.message||JSON.stringify(data.error));saveToken(data);sessionStorage.removeItem("collections_pkce_verifier");sessionStorage.removeItem("collections_oauth_state")}
   async function ensureToken(){if(accessToken&&Date.now()<expiresAt)return true;clearTokens();return false}
-
-  function getRange(){
-    const p=rangePreset.value;
-    if(p==="all")return{from:null,to:null,label:"All"};
-    if(p==="today"){const t=todayIso();return{from:t,to:t,label:"Today"}}
-    if(p==="last7")return{from:daysAgoIso(6),to:todayIso(),label:"Last 7 Days"};
-    if(p==="last30")return{from:daysAgoIso(29),to:todayIso(),label:"Last 30 Days"};
-    return{from:fromDate.value||null,to:toDate.value||null,label:"Custom Date Range"};
-  }
-  function makeWhere(r){
-    const c=["scheduled_date IS NOT NULL","activity_status = 'Scheduled'"];
-    if(r.from)c.push(`scheduled_date >= DATE '${r.from} 00:00:00'`);
-    if(r.to){const d=new Date(r.to+"T00:00:00");d.setDate(d.getDate()+1);c.push(`scheduled_date < DATE '${isoLocal(d)} 00:00:00'`)}
-    return c.join(" AND ");
-  }
-  async function queryLayer(url,obj){
-    const params=new URLSearchParams({f:"json",token:accessToken,...obj});
-    const resp=await fetch(url+"/query?"+params.toString());
-    const data=await resp.json();
-    if(data.error){
-      if(data.error.code===498||data.error.code===499){clearTokens();throw new Error("ArcGIS session expired. Sign in again.")}
-      throw new Error(data.error.message||JSON.stringify(data.error));
-    }
-    return Array.isArray(data.features)?data.features:[];
-  }
-  async function queryDistinct(url,field){
-    const fs=await queryLayer(url,{
-      where:`${field} IS NOT NULL`,
-      outFields:field,
-      returnDistinctValues:"true",
-      returnGeometry:"false",
-      orderByFields:`${field} ASC`,
-      resultRecordCount:"2000"
-    });
-    return fs.map(f=>clean((f.attributes||{})[field])).filter(Boolean);
-  }
-  async function loadFilterChoices(){
-    const [requestTypes,accountTypes,collectionDays,activityTypes]=await Promise.all([
-      queryDistinct(ACTIVITY_URL,"activity_class"),
-      queryDistinct(SERVICE_LOCATION_URL,"account_type"),
-      queryDistinct(SERVICE_LOCATION_URL,"dayofweek"),
-      queryDistinct(ACTIVITY_URL,"activity_type")
-    ]);
-    populateSelect(requestTypeFilter,requestTypes);
-    populateSelect(accountTypeFilter,accountTypes);
-    populateSelect(collectionDayFilter,collectionDays);
-    populateSelect(activityTypeFilter,activityTypes);
-  }
-  async function parentMapFor(activityFeatures){
-    const gids=[...new Set(activityFeatures.map(f=>normGuid((f.attributes||{}).parentglobalid)).filter(Boolean))];
-    const map=new Map();
-    for(let i=0;i<gids.length;i+=100){
-      const vals=gids.slice(i,i+100).map(g=>`'${g.replaceAll("'","''")}'`);
-      const fs=await queryLayer(SERVICE_LOCATION_URL,{where:`GlobalID IN (${vals.join(",")})`,outFields:PARENT_FIELDS,returnGeometry:"false",resultRecordCount:"2000"});
-      fs.forEach(f=>{const a=f.attributes||{};map.set(normGuid(a.GlobalID),a)});
-    }
-    return map;
-  }
+  function getRange(){const p=rangePreset.value;if(p==="all")return{from:null,to:null,label:"All"};if(p==="today"){const t=todayIso();return{from:t,to:t,label:"Today"}}if(p==="last7")return{from:daysAgoIso(6),to:todayIso(),label:"Last 7 Days"};if(p==="last30")return{from:daysAgoIso(29),to:todayIso(),label:"Last 30 Days"};return{from:fromDate.value||null,to:toDate.value||null,label:"Custom Date Range"}}
+  function makeWhere(r){const c=["scheduled_date IS NOT NULL","activity_status = 'Scheduled'"];if(r.from)c.push(`scheduled_date >= DATE '${r.from} 00:00:00'`);if(r.to){const d=new Date(r.to+"T00:00:00");d.setDate(d.getDate()+1);c.push(`scheduled_date < DATE '${isoLocal(d)} 00:00:00'`)}return c.join(" AND ")}
+  async function queryLayer(url,obj){const params=new URLSearchParams({f:"json",token:accessToken,...obj});const resp=await fetch(url+"/query?"+params.toString());const data=await resp.json();if(data.error){if(data.error.code===498||data.error.code===499){clearTokens();throw new Error("ArcGIS session expired. Sign in again.")}throw new Error(data.error.message||JSON.stringify(data.error))}return Array.isArray(data.features)?data.features:[]}
+  async function parentMapFor(activityFeatures){const gids=[...new Set(activityFeatures.map(f=>normGuid((f.attributes||{}).parentglobalid)).filter(Boolean))];const map=new Map();for(let i=0;i<gids.length;i+=100){const vals=gids.slice(i,i+100).map(g=>`'${g.replaceAll("'","''")}'`);const fs=await queryLayer(SERVICE_LOCATION_URL,{where:`GlobalID IN (${vals.join(",")})`,outFields:PARENT_FIELDS,returnGeometry:"false",resultRecordCount:"2000"});fs.forEach(f=>{const a=f.attributes||{};map.set(normGuid(a.GlobalID),a)})}return map}
   function bestAddress(a,p){return clean(a.location_address)||clean(a.location_address2)||clean(p&&p.location_address)||clean(p&&p.location_address_orig)}
   function bestCans(a,p){const vals=[];[a.can_nums,a.co_can,p&&p.can_nums].forEach(v=>{const s=clean(v);if(s&&!vals.includes(s))vals.push(s)});return vals.join(", ")}
   function bestDay(a,p){return clean(a.dayofweek)||clean(p&&p.dayofweek)}
   function bestAccountType(a,p){return clean(a.account_type)||clean(p&&p.account_type)}
-
-  function populateSelect(select,values){
-    const previous=select.value;
-    const sorted=[...new Set(values.map(clean).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true,sensitivity:"base"}));
-    select.innerHTML='<option value="">All</option>'+sorted.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join("");
-    if(sorted.includes(previous))select.value=previous;
-  }
-
-  function buildFieldPanel(){
-    fieldsPanel.innerHTML=COLUMN_DEFS.map(c=>`<label><input type="checkbox" data-field="${c.key}" ${selectedFields.has(c.key)?"checked":""}> ${esc(c.label)}</label>`).join("");
-    fieldsPanel.querySelectorAll('input[data-field]').forEach(cb=>cb.addEventListener('change',()=>{
-      const key=cb.dataset.field;
-      if(cb.checked)selectedFields.add(key);else selectedFields.delete(key);
-      if(selectedFields.size===0){cb.checked=true;selectedFields.add(key)}
-      renderTable();
-    }));
-  }
-
-  function filteredRows(){
-    return allRows.filter(r=>
-      (!requestTypeFilter.value||r.requestType===requestTypeFilter.value) &&
-      (!accountTypeFilter.value||r.accountType===accountTypeFilter.value) &&
-      (!collectionDayFilter.value||r.day===collectionDayFilter.value) &&
-      (!activityTypeFilter.value||r.activity===activityTypeFilter.value)
-    );
-  }
-
-  function renderTable(){
-    const cols=COLUMN_DEFS.filter(c=>selectedFields.has(c.key));
-    const rows=filteredRows();
-    thead.innerHTML='<tr>'+cols.map(c=>`<th>${esc(c.label)}</th>`).join('')+'</tr>';
-    tbody.innerHTML=rows.length?rows.map(r=>'<tr>'+cols.map(c=>`<td>${esc(r[c.key])}</td>`).join('')+'</tr>').join(''):`<tr><td colspan="${cols.length}">No scheduled records match the current filters.</td></tr>`;
-    const active=[];
-    if(requestTypeFilter.value)active.push(`Request Type: ${requestTypeFilter.value}`);
-    if(accountTypeFilter.value)active.push(`Account Type: ${accountTypeFilter.value}`);
-    if(collectionDayFilter.value)active.push(`Collection Day: ${collectionDayFilter.value}`);
-    if(activityTypeFilter.value)active.push(`Activity Type: ${activityTypeFilter.value}`);
-    meta.textContent=`${currentRangeLabel} | Records: ${rows.length}${active.length?" | "+active.join(" | "):""}`;
-  }
-
-  async function loadSchedule(){
-    const r=getRange();
-    if(rangePreset.value==="custom"){
-      if(!r.from||!r.to){status.textContent="Choose both From and To dates.";return}
-      if(r.from>r.to){status.textContent="The From date cannot be after the To date.";return}
-    }
-    if(!await ensureToken()){status.textContent="Sign in to ArcGIS to load the schedule.";return}
-    status.textContent="Loading live schedule, filters, and service details…";
-
-    const [activities]=await Promise.all([
-      queryLayer(ACTIVITY_URL,{where:makeWhere(r),outFields:ACTIVITY_FIELDS,returnGeometry:"false",orderByFields:"scheduled_date ASC, location_address2 ASC",resultRecordCount:"2000"}),
-      loadFilterChoices()
-    ]);
-    const parents=await parentMapFor(activities);
-
-    allRows=activities.map(f=>{
-      const a=f.attributes||{},p=parents.get(normGuid(a.parentglobalid))||{};
-      return{
-        address:bestAddress(a,p),
-        requestType:clean(a.activity_class),
-        accountType:bestAccountType(a,p),
-        activity:clean(a.activity_type),
-        scheduled:displayIso(arcDate(a.scheduled_date)),
-        cans:bestCans(a,p),
-        day:bestDay(a,p),
-        notes:clean(a.note)
-      };
-    });
-
-    currentRangeLabel=!r.from&&!r.to?"All scheduled records":r.from===r.to?`${r.label}: ${displayIso(r.from)}`:`${r.label}: ${displayIso(r.from)} - ${displayIso(r.to)}`;
-    status.textContent="";
-    renderTable();
-  }
-
-  async function handleCallback(){
-    const q=new URLSearchParams(location.search),code=q.get("code"),returnedState=q.get("state");
-    if(!code)return false;
-    const expected=sessionStorage.getItem("collections_oauth_state");
-    if(!expected||returnedState!==expected)throw new Error("OAuth state validation failed.");
-    status.textContent="Completing ArcGIS sign-in…";
-    await exchangeCode(code);
-    history.replaceState({},document.title,REDIRECT_URI);
-    await loadSchedule();
-    return true;
-  }
-
-  buildFieldPanel();
-  renderTable();
-
-  rangePreset.addEventListener("change",()=>{
-    customRange.style.display=rangePreset.value==="custom"?"flex":"none";
-    if(accessToken&&rangePreset.value!=="custom")loadSchedule().catch(e=>status.textContent=e.message);
-  });
+  function uniqueValues(values){return [...new Set(values.map(clean).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true,sensitivity:"base"}))}
+  function populateSelect(select,values){const previous=select.value;const sorted=uniqueValues(values);select.replaceChildren(new Option("All",""),...sorted.map(v=>new Option(v,v)));if(sorted.includes(previous))select.value=previous;return sorted.length}
+  function populateFiltersFromRows(){const n1=populateSelect(requestTypeFilter,allRows.map(r=>r.requestType));const n2=populateSelect(accountTypeFilter,allRows.map(r=>r.accountType));const n3=populateSelect(collectionDayFilter,allRows.map(r=>r.day));const n4=populateSelect(activityTypeFilter,allRows.map(r=>r.activity));filterDiag.textContent=`Build ${BUILD} · rows ${allRows.length} · filter values ${n1}/${n2}/${n3}/${n4}`}
+  function buildFieldPanel(){fieldsPanel.innerHTML=COLUMN_DEFS.map(c=>`<label><input type="checkbox" data-field="${c.key}" ${selectedFields.has(c.key)?"checked":""}> ${esc(c.label)}</label>`).join("");fieldsPanel.querySelectorAll('input[data-field]').forEach(cb=>cb.addEventListener('change',()=>{const key=cb.dataset.field;if(cb.checked)selectedFields.add(key);else selectedFields.delete(key);if(selectedFields.size===0){cb.checked=true;selectedFields.add(key)}renderTable()}))}
+  function filteredRows(){return allRows.filter(r=>(!requestTypeFilter.value||r.requestType===requestTypeFilter.value)&&(!accountTypeFilter.value||r.accountType===accountTypeFilter.value)&&(!collectionDayFilter.value||r.day===collectionDayFilter.value)&&(!activityTypeFilter.value||r.activity===activityTypeFilter.value))}
+  function renderTable(){const cols=COLUMN_DEFS.filter(c=>selectedFields.has(c.key));const rows=filteredRows();thead.innerHTML='<tr>'+cols.map(c=>`<th>${esc(c.label)}</th>`).join('')+'</tr>';tbody.innerHTML=rows.length?rows.map(r=>'<tr>'+cols.map(c=>`<td>${esc(r[c.key])}</td>`).join('')+'</tr>').join(''):`<tr><td colspan="${cols.length}">No scheduled records match the current filters.</td></tr>`;const active=[];if(requestTypeFilter.value)active.push(`Request Type: ${requestTypeFilter.value}`);if(accountTypeFilter.value)active.push(`Account Type: ${accountTypeFilter.value}`);if(collectionDayFilter.value)active.push(`Collection Day: ${collectionDayFilter.value}`);if(activityTypeFilter.value)active.push(`Activity Type: ${activityTypeFilter.value}`);meta.textContent=`${currentRangeLabel} | Records: ${rows.length}${active.length?" | "+active.join(" | "):""}`}
+  async function loadSchedule(){const r=getRange();if(rangePreset.value==="custom"){if(!r.from||!r.to){status.textContent="Choose both From and To dates.";return}if(r.from>r.to){status.textContent="The From date cannot be after the To date.";return}}if(!await ensureToken()){status.textContent="Sign in to ArcGIS to load the schedule.";return}status.textContent="Loading live schedule and service details…";const activities=await queryLayer(ACTIVITY_URL,{where:makeWhere(r),outFields:ACTIVITY_FIELDS,returnGeometry:"false",orderByFields:"scheduled_date ASC, location_address2 ASC",resultRecordCount:"2000"});const parents=await parentMapFor(activities);allRows=activities.map(f=>{const a=f.attributes||{},p=parents.get(normGuid(a.parentglobalid))||{};return{address:bestAddress(a,p),requestType:clean(a.activity_class),accountType:bestAccountType(a,p),activity:clean(a.activity_type),scheduled:displayIso(arcDate(a.scheduled_date)),cans:bestCans(a,p),day:bestDay(a,p),notes:clean(a.note)}});populateFiltersFromRows();currentRangeLabel=!r.from&&!r.to?"All scheduled records":r.from===r.to?`${r.label}: ${displayIso(r.from)}`:`${r.label}: ${displayIso(r.from)} - ${displayIso(r.to)}`;status.textContent="";renderTable()}
+  async function handleCallback(){const q=new URLSearchParams(location.search),code=q.get("code"),returnedState=q.get("state");if(!code)return false;const expected=sessionStorage.getItem("collections_oauth_state");if(!expected||returnedState!==expected)throw new Error("OAuth state validation failed.");status.textContent="Completing ArcGIS sign-in…";await exchangeCode(code);history.replaceState({},document.title,REDIRECT_URI);await loadSchedule();return true}
+  buildFieldPanel();renderTable();
+  rangePreset.addEventListener("change",()=>{customRange.style.display=rangePreset.value==="custom"?"flex":"none";if(accessToken&&rangePreset.value!=="custom")loadSchedule().catch(e=>status.textContent=e.message)});
   [fromDate,toDate].forEach(el=>el.addEventListener('change',()=>{if(accessToken&&rangePreset.value==='custom'&&fromDate.value&&toDate.value)loadSchedule().catch(e=>status.textContent=e.message)}));
   [requestTypeFilter,accountTypeFilter,collectionDayFilter,activityTypeFilter].forEach(el=>el.addEventListener('change',renderTable));
-  clearFiltersBtn.addEventListener('click',()=>{
-    [requestTypeFilter,accountTypeFilter,collectionDayFilter,activityTypeFilter].forEach(el=>el.value='');
-    renderTable();
-  });
-  fieldsBtn.addEventListener('click',e=>{e.stopPropagation();fieldsPanel.classList.toggle('open')});
-  document.addEventListener('click',e=>{if(!fieldsPanel.contains(e.target)&&e.target!==fieldsBtn)fieldsPanel.classList.remove('open')});
+  clearFiltersBtn.addEventListener('click',()=>{[requestTypeFilter,accountTypeFilter,collectionDayFilter,activityTypeFilter].forEach(el=>el.value='');renderTable()});
+  fieldsBtn.addEventListener('click',e=>{e.stopPropagation();fieldsPanel.classList.toggle('open')});document.addEventListener('click',e=>{if(!fieldsPanel.contains(e.target)&&e.target!==fieldsBtn)fieldsPanel.classList.remove('open')});
   signInBtn.addEventListener("click",()=>beginLogin().catch(e=>status.textContent=e.message));
-  signOutBtn.addEventListener("click",()=>{
-    clearTokens();allRows=[];currentRangeLabel="";
-    tbody.innerHTML='<tr><td>Sign in to load the live schedule.</td></tr>';meta.textContent="";status.textContent="";
-  });
-  refreshBtn.addEventListener("click",()=>loadSchedule().catch(e=>status.textContent="Live ArcGIS query failed: "+e.message));
-  printBtn.addEventListener("click",()=>window.print());
-
-  setAuthUI();
-  handleCallback().then(done=>{if(!done&&accessToken)loadSchedule().catch(e=>status.textContent=e.message)}).catch(e=>{clearTokens();status.textContent="ArcGIS sign-in failed: "+e.message});
+  signOutBtn.addEventListener("click",()=>{clearTokens();allRows=[];currentRangeLabel="";filterDiag.textContent=`Build ${BUILD} · signed out`;tbody.innerHTML='<tr><td>Sign in to load the live schedule.</td></tr>';meta.textContent="";status.textContent=""});
+  refreshBtn.addEventListener("click",()=>loadSchedule().catch(e=>status.textContent="Live ArcGIS query failed: "+e.message));printBtn.addEventListener("click",()=>window.print());
+  setAuthUI();handleCallback().then(done=>{if(!done&&accessToken)loadSchedule().catch(e=>status.textContent=e.message)}).catch(e=>{clearTokens();status.textContent="ArcGIS sign-in failed: "+e.message});
 })();
 </script>
 </body>
