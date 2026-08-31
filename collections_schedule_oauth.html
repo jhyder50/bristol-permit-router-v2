@@ -124,7 +124,7 @@ tr{break-inside:avoid}
   const ACTIVITY_URL=SERVICE_ROOT+"/1",SERVICE_LOCATION_URL=SERVICE_ROOT+"/0";
   const REDIRECT_URI="https://jhyder50.github.io/bristol-permit-router-v2/collections_schedule_oauth.html";
   const PAGE_SIZE=2000;
-  const BASE_ACTIVITY_FIELDS=["OBJECTID","coll_id","parentglobalid","location_address","location_address2","activity_class","activity_type","scheduled_date","can_nums","co_can","dayofweek","account_type","note","activity_status","co_status"];
+  const BASE_ACTIVITY_FIELDS=["OBJECTID","coll_id","parentglobalid","location_address","location_address2","activity_class","activity_type","scheduled_date","can_nums","dayofweek","account_type","note","activity_status","co_status"];
   const PARENT_FIELDS="*";
   const COLUMN_DEFS=[
     {key:"address",label:"Address",default:true},{key:"ownerName",label:"Owner Name",default:false},
@@ -173,7 +173,7 @@ tr{break-inside:avoid}
     openedFieldName=hit?hit.name:"";return openedFieldName}
   async function parentMapFor(activityFeatures){const gids=[...new Set(activityFeatures.map(f=>normGuid((f.attributes||{}).parentglobalid)).filter(Boolean))],map=new Map();for(let i=0;i<gids.length;i+=100){status.textContent=`Loading service details… ${Math.min(i+100,gids.length).toLocaleString()} of ${gids.length.toLocaleString()}`;const vals=gids.slice(i,i+100).map(g=>`'${g.replaceAll("'","''")}'`);const fs=await queryLayer(SERVICE_LOCATION_URL,{where:`GlobalID IN (${vals.join(",")})`,outFields:PARENT_FIELDS,returnGeometry:"false",resultRecordCount:"2000"});fs.forEach(f=>{const a=f.attributes||{};map.set(normGuid(a.GlobalID),a)})}return map}
   function bestAddress(a,p){return clean(a.location_address)||clean(a.location_address2)||clean(p&&p.location_address)||clean(p&&p.location_address_orig)}
-  function bestCans(a,p){const vals=[];[a.can_nums,a.co_can,p&&p.can_nums].forEach(v=>{const s=clean(v);if(s&&!vals.includes(s))vals.push(s)});return vals.join(", ")}
+  function bestCans(a,p){const vals=[];[a.can_nums,p&&p.can_nums].forEach(v=>{const s=clean(v);if(s&&!vals.includes(s))vals.push(s)});return vals.join(", ")}
   function bestDay(a,p){return clean(a.dayofweek)||clean(p&&p.dayofweek)}
   function bestAccountType(a,p){return clean(a.account_type)||clean(p&&p.account_type)}
   function bestOwnerName(p){if(!p)return"";const candidates=["owner_name","ownername","owner","customer_name","customername","account_name","accountname","property_owner","propertyowner"];for(const k of candidates){if(clean(p[k]))return clean(p[k])}for(const k of Object.keys(p)){const n=k.toLowerCase().replace(/[^a-z0-9]/g,"");if(["ownername","customername","accountname","propertyowner"].includes(n)&&clean(p[k]))return clean(p[k])}return""}
