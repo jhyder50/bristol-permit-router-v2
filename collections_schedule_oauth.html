@@ -27,20 +27,20 @@ h1{margin:0 0 4px;font-size:24px}
 .auth{margin-bottom:10px;font-weight:600}
 .status{margin:8px 0 12px;min-height:20px;font-weight:600}
 .table-wrap{overflow-x:auto;width:100%}
-table{width:100%;min-width:980px;border-collapse:collapse;table-layout:fixed}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
 thead{display:table-header-group}
-th,td{border:1px solid var(--border);padding:6px 8px;vertical-align:top;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-th{background:#e7e7e7;text-align:left}
-th.col-address,td.col-address{width:17%;min-width:150px}
-th.col-ownerName,td.col-ownerName{width:16%;min-width:150px}
-th.col-requestType,td.col-requestType{width:12%;min-width:115px}
-th.col-accountType,td.col-accountType{width:12%;min-width:115px}
-th.col-activity,td.col-activity{width:22%;min-width:180px}
-th.col-status,td.col-status{width:11%;min-width:105px}
-th.col-scheduled,td.col-scheduled{width:10%;min-width:105px}
-th.col-cans,td.col-cans{width:13%;min-width:120px}
-th.col-day,td.col-day{width:10%;min-width:105px}
-th.col-notes,td.col-notes{width:28%;min-width:260px;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+th,td{border:1px solid var(--border);padding:6px 8px;vertical-align:top;overflow:hidden;text-overflow:ellipsis}
+th{background:#e7e7e7;text-align:left;white-space:nowrap}
+th.col-address,td.col-address{width:45ch;min-width:40ch;max-width:50ch;white-space:nowrap}
+th.col-ownerName,td.col-ownerName{width:28ch;white-space:nowrap}
+th.col-requestType,td.col-requestType{width:18ch;white-space:nowrap}
+th.col-accountType,td.col-accountType{width:18ch;white-space:nowrap}
+th.col-activity,td.col-activity{width:30ch;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+th.col-status,td.col-status{width:16ch;white-space:nowrap}
+th.col-scheduled,td.col-scheduled{width:15ch;white-space:nowrap}
+th.col-cans,td.col-cans{width:14ch;white-space:nowrap}
+th.col-day,td.col-day{width:10ch;white-space:nowrap}
+th.col-notes,td.col-notes{width:auto;min-width:24ch;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
 tr{break-inside:avoid}
 @page{size:landscape;margin:.35in}
 @media print{
@@ -48,10 +48,14 @@ tr{break-inside:avoid}
  .toolbar,.filters,.status,.auth{display:none!important}
  h1{font-size:18pt}
  .table-wrap{overflow:visible}
- table{min-width:0;width:100%;table-layout:fixed}
+ table{width:100%;table-layout:fixed}
  th,td{font-size:8.25pt;padding:4px 5px}
- th:not(.col-notes),td:not(.col-notes){white-space:nowrap}
- th.col-notes,td.col-notes{white-space:normal;width:28%;min-width:220px}
+ th.col-address,td.col-address{width:45ch;min-width:40ch;max-width:50ch}
+ th.col-activity,td.col-activity{width:30ch;white-space:normal}
+ th.col-scheduled,td.col-scheduled{width:15ch}
+ th.col-cans,td.col-cans{width:14ch}
+ th.col-day,td.col-day{width:10ch}
+ th.col-notes,td.col-notes{width:auto;white-space:normal;min-width:20ch}
 }
 </style>
 </head>
@@ -151,38 +155,9 @@ tr{break-inside:avoid}
   function getRange(){const p=rangePreset.value;if(p==="all")return{from:null,to:null,label:"All"};if(p==="today"){const t=todayIso();return{from:t,to:t,label:"Today"}}if(p==="last7")return{from:daysAgoIso(6),to:todayIso(),label:"Last 7 Days"};if(p==="last30")return{from:daysAgoIso(29),to:todayIso(),label:"Last 30 Days"};return{from:fromDate.value||null,to:toDate.value||null,label:"Custom Date Range"}}
   function makeWhere(r){const c=[];if(r.from)c.push(`scheduled_date >= DATE '${r.from} 00:00:00'`);if(r.to){const d=new Date(r.to+"T00:00:00");d.setDate(d.getDate()+1);c.push(`scheduled_date < DATE '${isoLocal(d)} 00:00:00'`)}return c.length?c.join(" AND "):"1=1"}
 
-  async function queryLayer(url,obj){
-    const body=new URLSearchParams({f:"json",token:accessToken,...obj});
-    const resp=await fetch(url+"/query",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},body});
-    const text=await resp.text();let data;
-    try{data=JSON.parse(text)}catch(e){throw new Error(`ArcGIS data query returned HTTP ${resp.status} ${resp.statusText} with non-JSON content.`)}
-    if(data.error){if(data.error.code===498||data.error.code===499){clearTokens();throw new Error("ArcGIS session expired. Sign in again.")}throw new Error(data.error.message||JSON.stringify(data.error))}
-    return Array.isArray(data.features)?data.features:[];
-  }
-
-  async function queryAllFeatures(url,obj){
-    const all=[];let offset=0;
-    while(true){
-      status.textContent=`Loading activity records… ${offset.toLocaleString()} loaded`;
-      const page=await queryLayer(url,{...obj,resultOffset:String(offset),resultRecordCount:String(PAGE_SIZE)});
-      all.push(...page);
-      if(page.length<PAGE_SIZE)break;
-      offset+=page.length;
-    }
-    return all;
-  }
-
-  async function parentMapFor(activityFeatures){
-    const gids=[...new Set(activityFeatures.map(f=>normGuid((f.attributes||{}).parentglobalid)).filter(Boolean))];
-    const map=new Map();
-    for(let i=0;i<gids.length;i+=100){
-      status.textContent=`Loading service details… ${Math.min(i+100,gids.length).toLocaleString()} of ${gids.length.toLocaleString()}`;
-      const vals=gids.slice(i,i+100).map(g=>`'${g.replaceAll("'","''")}'`);
-      const fs=await queryLayer(SERVICE_LOCATION_URL,{where:`GlobalID IN (${vals.join(",")})`,outFields:PARENT_FIELDS,returnGeometry:"false",resultRecordCount:"2000"});
-      fs.forEach(f=>{const a=f.attributes||{};map.set(normGuid(a.GlobalID),a)});
-    }
-    return map;
-  }
+  async function queryLayer(url,obj){const body=new URLSearchParams({f:"json",token:accessToken,...obj});const resp=await fetch(url+"/query",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},body});const text=await resp.text();let data;try{data=JSON.parse(text)}catch(e){throw new Error(`ArcGIS data query returned HTTP ${resp.status} ${resp.statusText} with non-JSON content.`)}if(data.error){if(data.error.code===498||data.error.code===499){clearTokens();throw new Error("ArcGIS session expired. Sign in again.")}throw new Error(data.error.message||JSON.stringify(data.error))}return Array.isArray(data.features)?data.features:[]}
+  async function queryAllFeatures(url,obj){const all=[];let offset=0;while(true){status.textContent=`Loading activity records… ${offset.toLocaleString()} loaded`;const page=await queryLayer(url,{...obj,resultOffset:String(offset),resultRecordCount:String(PAGE_SIZE)});all.push(...page);if(page.length<PAGE_SIZE)break;offset+=page.length}return all}
+  async function parentMapFor(activityFeatures){const gids=[...new Set(activityFeatures.map(f=>normGuid((f.attributes||{}).parentglobalid)).filter(Boolean))];const map=new Map();for(let i=0;i<gids.length;i+=100){status.textContent=`Loading service details… ${Math.min(i+100,gids.length).toLocaleString()} of ${gids.length.toLocaleString()}`;const vals=gids.slice(i,i+100).map(g=>`'${g.replaceAll("'","''")}'`);const fs=await queryLayer(SERVICE_LOCATION_URL,{where:`GlobalID IN (${vals.join(",")})`,outFields:PARENT_FIELDS,returnGeometry:"false",resultRecordCount:"2000"});fs.forEach(f=>{const a=f.attributes||{};map.set(normGuid(a.GlobalID),a)})}return map}
 
   function bestAddress(a,p){return clean(a.location_address)||clean(a.location_address2)||clean(p&&p.location_address)||clean(p&&p.location_address_orig)}
   function bestCans(a,p){const vals=[];[a.can_nums,a.co_can,p&&p.can_nums].forEach(v=>{const s=clean(v);if(s&&!vals.includes(s))vals.push(s)});return vals.join(", ")}
@@ -200,19 +175,7 @@ tr{break-inside:avoid}
   function excelEscape(v){return esc(v).replaceAll("<br>","<br/>")}
   function exportExcel(){const cols=visibleColumns(),rows=filteredRows();if(!rows.length){status.textContent="No records match the current filters to export.";return}const table=`<table border="1"><thead><tr>${cols.map(c=>`<th>${excelEscape(c.label)}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>${cols.map(c=>`<td>${excelEscape(r[c.key])}</td>`).join("")}</tr>`).join("")}</tbody></table>`;const html=`<!doctype html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse;font-family:Arial,sans-serif}th,td{border:1px solid #666;padding:5px;vertical-align:top}th{font-weight:bold;background:#e7e7e7}</style></head><body><h2>Collections Scheduled Work</h2><p>${excelEscape(meta.textContent)}</p>${table}</body></html>`;const blob=new Blob(["\ufeff",html],{type:"application/vnd.ms-excel;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`Collections_Scheduled_Work_${todayIso()}.xls`;document.body.appendChild(a);a.click();const href=a.href;a.remove();setTimeout(()=>URL.revokeObjectURL(href),1000);status.textContent=`Exported ${rows.length.toLocaleString()} records to Excel.`}
 
-  async function loadSchedule(){
-    const r=getRange();
-    if(rangePreset.value==="custom"){if(!r.from||!r.to){status.textContent="Choose both From and To dates.";return}if(r.from>r.to){status.textContent="The From date cannot be after the To date.";return}}
-    if(!await ensureToken()){status.textContent="Sign in to ArcGIS to load the schedule.";return}
-    const activities=await queryAllFeatures(ACTIVITY_URL,{where:makeWhere(r),outFields:ACTIVITY_FIELDS,returnGeometry:"false",orderByFields:"OBJECTID ASC"});
-    const parents=await parentMapFor(activities);
-    allRows=activities.map(f=>{const a=f.attributes||{},p=parents.get(normGuid(a.parentglobalid))||{};return{address:bestAddress(a,p),ownerName:bestOwnerName(p),requestType:clean(a.activity_class),accountType:bestAccountType(a,p),activity:clean(a.activity_type),status:clean(a.activity_status),scheduled:displayIso(arcDate(a.scheduled_date)),cans:bestCans(a,p),day:bestDay(a,p),notes:clean(a.note)}});
-    allRows.sort((a,b)=>(a.scheduled||"9999").localeCompare(b.scheduled||"9999")||a.address.localeCompare(b.address,undefined,{numeric:true,sensitivity:"base"}));
-    populateFiltersFromRows();
-    currentRangeLabel=!r.from&&!r.to?"All activity records":r.from===r.to?`${r.label}: ${displayIso(r.from)}`:`${r.label}: ${displayIso(r.from)} - ${displayIso(r.to)}`;
-    status.textContent="";renderTable();
-  }
-
+  async function loadSchedule(){const r=getRange();if(rangePreset.value==="custom"){if(!r.from||!r.to){status.textContent="Choose both From and To dates.";return}if(r.from>r.to){status.textContent="The From date cannot be after the To date.";return}}if(!await ensureToken()){status.textContent="Sign in to ArcGIS to load the schedule.";return}const activities=await queryAllFeatures(ACTIVITY_URL,{where:makeWhere(r),outFields:ACTIVITY_FIELDS,returnGeometry:"false",orderByFields:"OBJECTID ASC"});const parents=await parentMapFor(activities);allRows=activities.map(f=>{const a=f.attributes||{},p=parents.get(normGuid(a.parentglobalid))||{};return{address:bestAddress(a,p),ownerName:bestOwnerName(p),requestType:clean(a.activity_class),accountType:bestAccountType(a,p),activity:clean(a.activity_type),status:clean(a.activity_status),scheduled:displayIso(arcDate(a.scheduled_date)),cans:bestCans(a,p),day:bestDay(a,p),notes:clean(a.note)}});allRows.sort((a,b)=>(a.scheduled||"9999").localeCompare(b.scheduled||"9999")||a.address.localeCompare(b.address,undefined,{numeric:true,sensitivity:"base"}));populateFiltersFromRows();currentRangeLabel=!r.from&&!r.to?"All activity records":r.from===r.to?`${r.label}: ${displayIso(r.from)}`:`${r.label}: ${displayIso(r.from)} - ${displayIso(r.to)}`;status.textContent="";renderTable()}
   async function handleCallback(){const q=new URLSearchParams(location.search),code=q.get("code"),returnedState=q.get("state");if(!code)return false;const expected=sessionStorage.getItem("collections_oauth_state");if(!expected||returnedState!==expected)throw new Error("OAuth state validation failed.");status.textContent="Completing ArcGIS sign-in…";await exchangeCode(code);history.replaceState({},document.title,REDIRECT_URI);try{await loadSchedule()}catch(e){status.textContent="Signed in, but ArcGIS data load failed: "+e.message}return true}
   buildFieldPanel();renderTable();
   rangePreset.addEventListener("change",()=>{customRange.style.display=rangePreset.value==="custom"?"flex":"none";if(accessToken&&rangePreset.value!=="custom")loadSchedule().catch(e=>status.textContent=e.message)});
