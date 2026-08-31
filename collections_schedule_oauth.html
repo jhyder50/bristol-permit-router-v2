@@ -26,14 +26,33 @@ h1{margin:0 0 4px;font-size:24px}
 .meta{color:var(--muted);margin-bottom:8px}
 .auth{margin-bottom:10px;font-weight:600}
 .status{margin:8px 0 12px;min-height:20px;font-weight:600}
-.table-wrap{overflow-x:auto}
-table{width:100%;border-collapse:collapse;table-layout:auto}
+.table-wrap{overflow-x:auto;width:100%}
+table{width:100%;min-width:1220px;border-collapse:collapse;table-layout:auto}
 thead{display:table-header-group}
-th,td{border:1px solid var(--border);padding:6px 7px;vertical-align:top;overflow-wrap:anywhere}
+th,td{border:1px solid var(--border);padding:6px 8px;vertical-align:top;white-space:nowrap;overflow-wrap:normal}
 th{background:#e7e7e7;text-align:left}
+th.col-address,td.col-address{min-width:180px}
+th.col-ownerName,td.col-ownerName{min-width:180px}
+th.col-requestType,td.col-requestType{min-width:130px}
+th.col-accountType,td.col-accountType{min-width:130px}
+th.col-activity,td.col-activity{min-width:190px}
+th.col-status,td.col-status{min-width:125px}
+th.col-scheduled,td.col-scheduled{min-width:125px}
+th.col-cans,td.col-cans{min-width:160px}
+th.col-day,td.col-day{min-width:125px}
+th.col-notes,td.col-notes{min-width:360px;width:32%;white-space:normal;overflow-wrap:anywhere}
 tr{break-inside:avoid}
 @page{size:landscape;margin:.35in}
-@media print{body{padding:0;font-size:10pt}.toolbar,.filters,.status,.auth{display:none!important}h1{font-size:18pt}.table-wrap{overflow:visible}}
+@media print{
+ body{padding:0;font-size:9pt}
+ .toolbar,.filters,.status,.auth{display:none!important}
+ h1{font-size:18pt}
+ .table-wrap{overflow:visible}
+ table{min-width:0;width:100%}
+ th,td{font-size:8.5pt;padding:4px 5px}
+ th:not(.col-notes),td:not(.col-notes){white-space:nowrap}
+ th.col-notes,td.col-notes{white-space:normal;min-width:260px;width:32%}
+}
 </style>
 </head>
 <body>
@@ -62,6 +81,7 @@ tr{break-inside:avoid}
   </div>
 </div>
 <div class="filters">
+  <label>Activity Status<select id="activityStatusFilter"><option value="">All</option></select></label>
   <label>Request Type<select id="requestTypeFilter"><option value="">All</option></select></label>
   <label>Account Type<select id="accountTypeFilter"><option value="">All</option></select></label>
   <label>Collection Day<select id="collectionDayFilter"><option value="">All</option></select></label>
@@ -91,6 +111,7 @@ tr{break-inside:avoid}
     {key:"requestType",label:"Request Type",default:false},
     {key:"accountType",label:"Account Type",default:false},
     {key:"activity",label:"Activity Requested",default:true},
+    {key:"status",label:"Activity Status",default:false},
     {key:"scheduled",label:"Scheduled Date",default:true},
     {key:"cans",label:"Can Number(s)",default:true},
     {key:"day",label:"Collection Day",default:true},
@@ -100,7 +121,7 @@ tr{break-inside:avoid}
   const rangePreset=$("rangePreset"),customRange=$("customRange"),fromDate=$("fromDate"),toDate=$("toDate");
   const signInBtn=$("signInBtn"),signOutBtn=$("signOutBtn"),refreshBtn=$("refreshBtn"),printBtn=$("printBtn"),exportBtn=$("exportBtn");
   const fieldsBtn=$("fieldsBtn"),fieldsPanel=$("fieldsPanel");
-  const requestTypeFilter=$("requestTypeFilter"),accountTypeFilter=$("accountTypeFilter"),collectionDayFilter=$("collectionDayFilter"),activityTypeFilter=$("activityTypeFilter"),clearFiltersBtn=$("clearFiltersBtn");
+  const activityStatusFilter=$("activityStatusFilter"),requestTypeFilter=$("requestTypeFilter"),accountTypeFilter=$("accountTypeFilter"),collectionDayFilter=$("collectionDayFilter"),activityTypeFilter=$("activityTypeFilter"),clearFiltersBtn=$("clearFiltersBtn");
   const thead=$("thead"),tbody=$("tbody"),meta=$("meta"),status=$("status"),auth=$("auth");
   let accessToken=sessionStorage.getItem("collections_oauth_access_token")||"";
   let expiresAt=Number(sessionStorage.getItem("collections_oauth_expires_at")||"0");
@@ -125,8 +146,9 @@ tr{break-inside:avoid}
   async function beginLogin(){const verifier=randomString(64),state=randomString(32);sessionStorage.setItem("collections_pkce_verifier",verifier);sessionStorage.setItem("collections_oauth_state",state);const params=new URLSearchParams({client_id:CLIENT_ID,response_type:"code",redirect_uri:REDIRECT_URI,code_challenge:await challenge(verifier),code_challenge_method:"S256",state});window.location.assign(AUTHORIZE+"?"+params.toString())}
   async function exchangeCode(code){const verifier=sessionStorage.getItem("collections_pkce_verifier")||"";if(!verifier)throw new Error("PKCE verifier is missing.");const body=new URLSearchParams({f:"json",client_id:CLIENT_ID,grant_type:"authorization_code",redirect_uri:REDIRECT_URI,code,code_verifier:verifier});const r=await fetch(TOKEN_URL,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body});const data=await r.json();if(data.error)throw new Error(data.error_description||data.error.message||JSON.stringify(data.error));saveToken(data);sessionStorage.removeItem("collections_pkce_verifier");sessionStorage.removeItem("collections_oauth_state")}
   async function ensureToken(){if(accessToken&&Date.now()<expiresAt)return true;clearTokens();return false}
+
   function getRange(){const p=rangePreset.value;if(p==="all")return{from:null,to:null,label:"All"};if(p==="today"){const t=todayIso();return{from:t,to:t,label:"Today"}}if(p==="last7")return{from:daysAgoIso(6),to:todayIso(),label:"Last 7 Days"};if(p==="last30")return{from:daysAgoIso(29),to:todayIso(),label:"Last 30 Days"};return{from:fromDate.value||null,to:toDate.value||null,label:"Custom Date Range"}}
-  function makeWhere(r){const c=["scheduled_date IS NOT NULL","activity_status = 'Scheduled'"];if(r.from)c.push(`scheduled_date >= DATE '${r.from} 00:00:00'`);if(r.to){const d=new Date(r.to+"T00:00:00");d.setDate(d.getDate()+1);c.push(`scheduled_date < DATE '${isoLocal(d)} 00:00:00'`)}return c.join(" AND ")}
+  function makeWhere(r){const c=[];if(r.from)c.push(`scheduled_date >= DATE '${r.from} 00:00:00'`);if(r.to){const d=new Date(r.to+"T00:00:00");d.setDate(d.getDate()+1);c.push(`scheduled_date < DATE '${isoLocal(d)} 00:00:00'`)}return c.length?c.join(" AND "):"1=1"}
   async function queryLayer(url,obj){const params=new URLSearchParams({f:"json",token:accessToken,...obj});const resp=await fetch(url+"/query?"+params.toString());const data=await resp.json();if(data.error){if(data.error.code===498||data.error.code===499){clearTokens();throw new Error("ArcGIS session expired. Sign in again.")}throw new Error(data.error.message||JSON.stringify(data.error))}return Array.isArray(data.features)?data.features:[]}
   async function parentMapFor(activityFeatures){const gids=[...new Set(activityFeatures.map(f=>normGuid((f.attributes||{}).parentglobalid)).filter(Boolean))];const map=new Map();for(let i=0;i<gids.length;i+=100){const vals=gids.slice(i,i+100).map(g=>`'${g.replaceAll("'","''")}'`);const fs=await queryLayer(SERVICE_LOCATION_URL,{where:`GlobalID IN (${vals.join(",")})`,outFields:PARENT_FIELDS,returnGeometry:"false",resultRecordCount:"2000"});fs.forEach(f=>{const a=f.attributes||{};map.set(normGuid(a.GlobalID),a)})}return map}
   function bestAddress(a,p){return clean(a.location_address)||clean(a.location_address2)||clean(p&&p.location_address)||clean(p&&p.location_address_orig)}
@@ -137,27 +159,21 @@ tr{break-inside:avoid}
   function uniqueValues(values){return [...new Set(values.map(clean).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true,sensitivity:"base"}))}
   function dayValues(values){const order=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];const vals=[...new Set(values.map(clean).filter(Boolean))];return vals.sort((a,b)=>{const ai=order.findIndex(x=>x.toLowerCase()===a.toLowerCase()),bi=order.findIndex(x=>x.toLowerCase()===b.toLowerCase());if(ai>=0&&bi>=0)return ai-bi;if(ai>=0)return-1;if(bi>=0)return 1;return a.localeCompare(b)})}
   function populateSelect(select,values,sorter=uniqueValues){const previous=select.value;const sorted=sorter(values);select.replaceChildren(new Option("All",""),...sorted.map(v=>new Option(v,v)));if(sorted.includes(previous))select.value=previous;return sorted.length}
-  function populateFiltersFromRows(){populateSelect(requestTypeFilter,allRows.map(r=>r.requestType));populateSelect(accountTypeFilter,allRows.map(r=>r.accountType));populateSelect(collectionDayFilter,allRows.map(r=>r.day),dayValues);populateSelect(activityTypeFilter,allRows.map(r=>r.activity))}
+  function populateFiltersFromRows(){populateSelect(activityStatusFilter,allRows.map(r=>r.status));populateSelect(requestTypeFilter,allRows.map(r=>r.requestType));populateSelect(accountTypeFilter,allRows.map(r=>r.accountType));populateSelect(collectionDayFilter,allRows.map(r=>r.day),dayValues);populateSelect(activityTypeFilter,allRows.map(r=>r.activity))}
   function buildFieldPanel(){fieldsPanel.innerHTML=COLUMN_DEFS.map(c=>`<label><input type="checkbox" data-field="${c.key}" ${selectedFields.has(c.key)?"checked":""}> ${esc(c.label)}</label>`).join("");fieldsPanel.querySelectorAll('input[data-field]').forEach(cb=>cb.addEventListener('change',()=>{const key=cb.dataset.field;if(cb.checked)selectedFields.add(key);else selectedFields.delete(key);if(selectedFields.size===0){cb.checked=true;selectedFields.add(key)}renderTable()}))}
-  function filteredRows(){return allRows.filter(r=>(!requestTypeFilter.value||r.requestType===requestTypeFilter.value)&&(!accountTypeFilter.value||r.accountType===accountTypeFilter.value)&&(!collectionDayFilter.value||r.day===collectionDayFilter.value)&&(!activityTypeFilter.value||r.activity===activityTypeFilter.value))}
+  function filteredRows(){return allRows.filter(r=>(!activityStatusFilter.value||r.status===activityStatusFilter.value)&&(!requestTypeFilter.value||r.requestType===requestTypeFilter.value)&&(!accountTypeFilter.value||r.accountType===accountTypeFilter.value)&&(!collectionDayFilter.value||r.day===collectionDayFilter.value)&&(!activityTypeFilter.value||r.activity===activityTypeFilter.value))}
   function visibleColumns(){return COLUMN_DEFS.filter(c=>selectedFields.has(c.key))}
-  function renderTable(){const cols=visibleColumns();const rows=filteredRows();thead.innerHTML='<tr>'+cols.map(c=>`<th>${esc(c.label)}</th>`).join('')+'</tr>';tbody.innerHTML=rows.length?rows.map(r=>'<tr>'+cols.map(c=>`<td>${esc(r[c.key])}</td>`).join('')+'</tr>').join(''):`<tr><td colspan="${cols.length}">No scheduled records match the current filters.</td></tr>`;const active=[];if(requestTypeFilter.value)active.push(`Request Type: ${requestTypeFilter.value}`);if(accountTypeFilter.value)active.push(`Account Type: ${accountTypeFilter.value}`);if(collectionDayFilter.value)active.push(`Collection Day: ${collectionDayFilter.value}`);if(activityTypeFilter.value)active.push(`Activity Requested: ${activityTypeFilter.value}`);meta.textContent=`${currentRangeLabel} | Records: ${rows.length}${active.length?" | "+active.join(" | "):""}`}
+  function renderTable(){const cols=visibleColumns(),rows=filteredRows();thead.innerHTML='<tr>'+cols.map(c=>`<th class="col-${c.key}">${esc(c.label)}</th>`).join('')+'</tr>';tbody.innerHTML=rows.length?rows.map(r=>'<tr>'+cols.map(c=>`<td class="col-${c.key}">${esc(r[c.key])}</td>`).join('')+'</tr>').join(''):`<tr><td colspan="${cols.length}">No activity records match the current filters.</td></tr>`;const active=[];if(activityStatusFilter.value)active.push(`Activity Status: ${activityStatusFilter.value}`);if(requestTypeFilter.value)active.push(`Request Type: ${requestTypeFilter.value}`);if(accountTypeFilter.value)active.push(`Account Type: ${accountTypeFilter.value}`);if(collectionDayFilter.value)active.push(`Collection Day: ${collectionDayFilter.value}`);if(activityTypeFilter.value)active.push(`Activity Requested: ${activityTypeFilter.value}`);meta.textContent=`${currentRangeLabel} | Records: ${rows.length}${active.length?" | "+active.join(" | "):""}`}
   function excelEscape(v){return esc(v).replaceAll("<br>","<br/>")}
-  function exportExcel(){
-    const cols=visibleColumns(),rows=filteredRows();
-    if(!rows.length){status.textContent="No records match the current filters to export.";return}
-    const table=`<table border="1"><thead><tr>${cols.map(c=>`<th>${excelEscape(c.label)}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>${cols.map(c=>`<td>${excelEscape(r[c.key])}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
-    const html=`<!doctype html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse;font-family:Arial,sans-serif}th,td{border:1px solid #666;padding:5px;vertical-align:top}th{font-weight:bold;background:#e7e7e7}</style></head><body><h2>Collections Scheduled Work</h2><p>${excelEscape(meta.textContent)}</p>${table}</body></html>`;
-    const blob=new Blob(["\ufeff",html],{type:"application/vnd.ms-excel;charset=utf-8"});
-    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`Collections_Scheduled_Work_${todayIso()}.xls`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);status.textContent=`Exported ${rows.length} record${rows.length===1?"":"s"} to Excel.`;
-  }
-  async function loadSchedule(){const r=getRange();if(rangePreset.value==="custom"){if(!r.from||!r.to){status.textContent="Choose both From and To dates.";return}if(r.from>r.to){status.textContent="The From date cannot be after the To date.";return}}if(!await ensureToken()){status.textContent="Sign in to ArcGIS to load the schedule.";return}status.textContent="Loading live schedule and service details…";const activities=await queryLayer(ACTIVITY_URL,{where:makeWhere(r),outFields:ACTIVITY_FIELDS,returnGeometry:"false",orderByFields:"scheduled_date ASC, location_address2 ASC",resultRecordCount:"2000"});const parents=await parentMapFor(activities);allRows=activities.map(f=>{const a=f.attributes||{},p=parents.get(normGuid(a.parentglobalid))||{};return{address:bestAddress(a,p),ownerName:bestOwnerName(p),requestType:clean(a.activity_class),accountType:bestAccountType(a,p),activity:clean(a.activity_type),scheduled:displayIso(arcDate(a.scheduled_date)),cans:bestCans(a,p),day:bestDay(a,p),notes:clean(a.note)}});populateFiltersFromRows();currentRangeLabel=!r.from&&!r.to?"All scheduled records":r.from===r.to?`${r.label}: ${displayIso(r.from)}`:`${r.label}: ${displayIso(r.from)} - ${displayIso(r.to)}`;status.textContent="";renderTable()}
+  function exportExcel(){const cols=visibleColumns(),rows=filteredRows();if(!rows.length){status.textContent="No records match the current filters to export.";return}const table=`<table border="1"><thead><tr>${cols.map(c=>`<th>${excelEscape(c.label)}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>${cols.map(c=>`<td>${excelEscape(r[c.key])}</td>`).join("")}</tr>`).join("")}</tbody></table>`;const html=`<!doctype html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse;font-family:Arial,sans-serif}th,td{border:1px solid #666;padding:5px;vertical-align:top}th{font-weight:bold;background:#e7e7e7}</style></head><body><h2>Collections Scheduled Work</h2><p>${excelEscape(meta.textContent)}</p>${table}</body></html>`;const blob=new Blob(["\ufeff",html],{type:"application/vnd.ms-excel;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`Collections_Scheduled_Work_${todayIso()}.xls`;document.body.appendChild(a);a.click();const href=a.href;a.remove();setTimeout(()=>URL.revokeObjectURL(href),1000);status.textContent=`Exported ${rows.length} record${rows.length===1?"":"s"} to Excel.`}
+
+  async function loadSchedule(){const r=getRange();if(rangePreset.value==="custom"){if(!r.from||!r.to){status.textContent="Choose both From and To dates.";return}if(r.from>r.to){status.textContent="The From date cannot be after the To date.";return}}if(!await ensureToken()){status.textContent="Sign in to ArcGIS to load the schedule.";return}status.textContent="Loading collection activity and service details…";const activities=await queryLayer(ACTIVITY_URL,{where:makeWhere(r),outFields:ACTIVITY_FIELDS,returnGeometry:"false",orderByFields:"scheduled_date ASC, location_address2 ASC",resultRecordCount:"2000"});const parents=await parentMapFor(activities);allRows=activities.map(f=>{const a=f.attributes||{},p=parents.get(normGuid(a.parentglobalid))||{};return{address:bestAddress(a,p),ownerName:bestOwnerName(p),requestType:clean(a.activity_class),accountType:bestAccountType(a,p),activity:clean(a.activity_type),status:clean(a.activity_status),scheduled:displayIso(arcDate(a.scheduled_date)),cans:bestCans(a,p),day:bestDay(a,p),notes:clean(a.note)}});populateFiltersFromRows();currentRangeLabel=!r.from&&!r.to?"All activity records":r.from===r.to?`${r.label}: ${displayIso(r.from)}`:`${r.label}: ${displayIso(r.from)} - ${displayIso(r.to)}`;status.textContent="";renderTable()}
   async function handleCallback(){const q=new URLSearchParams(location.search),code=q.get("code"),returnedState=q.get("state");if(!code)return false;const expected=sessionStorage.getItem("collections_oauth_state");if(!expected||returnedState!==expected)throw new Error("OAuth state validation failed.");status.textContent="Completing ArcGIS sign-in…";await exchangeCode(code);history.replaceState({},document.title,REDIRECT_URI);await loadSchedule();return true}
   buildFieldPanel();renderTable();
   rangePreset.addEventListener("change",()=>{customRange.style.display=rangePreset.value==="custom"?"flex":"none";if(accessToken&&rangePreset.value!=="custom")loadSchedule().catch(e=>status.textContent=e.message)});
   [fromDate,toDate].forEach(el=>el.addEventListener('change',()=>{if(accessToken&&rangePreset.value==='custom'&&fromDate.value&&toDate.value)loadSchedule().catch(e=>status.textContent=e.message)}));
-  [requestTypeFilter,accountTypeFilter,collectionDayFilter,activityTypeFilter].forEach(el=>el.addEventListener('change',renderTable));
-  clearFiltersBtn.addEventListener('click',()=>{[requestTypeFilter,accountTypeFilter,collectionDayFilter,activityTypeFilter].forEach(el=>el.value='');renderTable()});
+  [activityStatusFilter,requestTypeFilter,accountTypeFilter,collectionDayFilter,activityTypeFilter].forEach(el=>el.addEventListener('change',renderTable));
+  clearFiltersBtn.addEventListener('click',()=>{[activityStatusFilter,requestTypeFilter,accountTypeFilter,collectionDayFilter,activityTypeFilter].forEach(el=>el.value='');renderTable()});
   fieldsBtn.addEventListener('click',e=>{e.stopPropagation();fieldsPanel.classList.toggle('open')});document.addEventListener('click',e=>{if(!fieldsPanel.contains(e.target)&&e.target!==fieldsBtn)fieldsPanel.classList.remove('open')});
   signInBtn.addEventListener("click",()=>beginLogin().catch(e=>status.textContent=e.message));
   signOutBtn.addEventListener("click",()=>{clearTokens();allRows=[];currentRangeLabel="";tbody.innerHTML='<tr><td>Sign in to load the live schedule.</td></tr>';meta.textContent="";status.textContent=""});
