@@ -27,20 +27,20 @@ h1{margin:0 0 4px;font-size:24px}
 .auth{margin-bottom:10px;font-weight:600}
 .status{margin:8px 0 12px;min-height:20px;font-weight:600}
 .table-wrap{overflow-x:auto;width:100%}
-table{width:100%;border-collapse:collapse;table-layout:auto}
+table{width:100%;min-width:1235px;border-collapse:collapse;table-layout:fixed}
 thead{display:table-header-group}
 th,td{border:1px solid var(--border);padding:6px 8px;vertical-align:top}
 th{background:#e7e7e7;text-align:left;white-space:nowrap;overflow:visible;text-overflow:clip}
-th.col-address,td.col-address{width:30ch;min-width:30ch;max-width:30ch;white-space:normal;overflow-wrap:anywhere}
-th.col-ownerName,td.col-ownerName{width:12ch;min-width:12ch;white-space:nowrap}
-th.col-requestType,td.col-requestType{width:14ch;min-width:14ch;white-space:nowrap}
-th.col-accountType,td.col-accountType{width:14ch;min-width:14ch;white-space:nowrap}
-th.col-activity,td.col-activity{width:30ch;min-width:20ch;max-width:30ch;white-space:normal;overflow-wrap:anywhere}
-th.col-status,td.col-status{width:17ch;min-width:17ch;white-space:nowrap}
-th.col-scheduled,td.col-scheduled{width:17ch;min-width:17ch;white-space:nowrap}
-th.col-cans,td.col-cans{width:16ch;min-width:16ch;white-space:nowrap}
-th.col-day,td.col-day{width:16ch;min-width:16ch;white-space:nowrap}
-th.col-notes,td.col-notes{width:auto;min-width:24ch;white-space:normal;overflow-wrap:anywhere}
+th.col-address,td.col-address{width:240px;min-width:240px;max-width:240px;white-space:normal;overflow-wrap:anywhere}
+th.col-ownerName,td.col-ownerName{width:120px;min-width:120px;white-space:nowrap}
+th.col-requestType,td.col-requestType{width:120px;min-width:120px;white-space:nowrap}
+th.col-accountType,td.col-accountType{width:120px;min-width:120px;white-space:nowrap}
+th.col-activity,td.col-activity{width:245px;min-width:245px;max-width:245px;white-space:normal;overflow-wrap:anywhere}
+th.col-status,td.col-status{width:125px;min-width:125px;white-space:nowrap}
+th.col-scheduled,td.col-scheduled{width:125px;min-width:125px;white-space:nowrap}
+th.col-cans,td.col-cans{width:120px;min-width:120px;white-space:nowrap}
+th.col-day,td.col-day{width:120px;min-width:120px;white-space:nowrap}
+th.col-notes,td.col-notes{width:auto;min-width:385px;white-space:normal;overflow-wrap:anywhere}
 tr{break-inside:avoid}
 @page{size:landscape;margin:.35in}
 @media print{
@@ -48,19 +48,19 @@ tr{break-inside:avoid}
  .toolbar,.filters,.status,.auth{display:none!important}
  h1{font-size:18pt}
  .table-wrap{overflow:visible}
- table{width:100%;table-layout:auto}
+ table{width:100%;min-width:0;table-layout:fixed}
  th,td{font-size:8.25pt;padding:4px 5px}
  th{white-space:nowrap;overflow:visible;text-overflow:clip}
- th.col-address,td.col-address{width:30ch;min-width:30ch;max-width:30ch;white-space:normal;overflow-wrap:anywhere}
- th.col-ownerName,td.col-ownerName{width:12ch;min-width:12ch}
- th.col-requestType,td.col-requestType{width:14ch;min-width:14ch}
- th.col-accountType,td.col-accountType{width:14ch;min-width:14ch}
- th.col-activity,td.col-activity{width:30ch;min-width:20ch;max-width:30ch;white-space:normal}
- th.col-status,td.col-status{width:17ch;min-width:17ch}
- th.col-scheduled,td.col-scheduled{width:17ch;min-width:17ch}
- th.col-cans,td.col-cans{width:16ch;min-width:16ch}
- th.col-day,td.col-day{width:16ch;min-width:16ch}
- th.col-notes,td.col-notes{width:auto;white-space:normal;min-width:20ch}
+ th.col-address,td.col-address{width:210px;white-space:normal;overflow-wrap:anywhere}
+ th.col-ownerName,td.col-ownerName{width:95px}
+ th.col-requestType,td.col-requestType{width:105px}
+ th.col-accountType,td.col-accountType{width:105px}
+ th.col-activity,td.col-activity{width:205px;white-space:normal}
+ th.col-status,td.col-status{width:110px}
+ th.col-scheduled,td.col-scheduled{width:110px}
+ th.col-cans,td.col-cans{width:105px}
+ th.col-day,td.col-day{width:105px}
+ th.col-notes,td.col-notes{width:auto;white-space:normal;min-width:180px}
 }
 </style>
 </head>
