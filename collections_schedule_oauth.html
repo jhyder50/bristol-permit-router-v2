@@ -67,7 +67,7 @@ tr{break-inside:avoid}
   <label>Collection Day<select id="collectionDayFilter"><option value="">All</option></select></label>
   <label>Activity Type<select id="activityTypeFilter"><option value="">All</option></select></label>
   <button type="button" id="clearFiltersBtn">Clear Filters</button>
-  <span id="filterDiag" class="diag">Build FILTER-3 · waiting for data</span>
+  <span id="filterDiag" class="diag">Build FILTER-4 · waiting for data</span>
 </div>
 <h1>Collections Scheduled Work</h1>
 <div id="auth" class="auth">Not signed in.</div>
@@ -76,7 +76,7 @@ tr{break-inside:avoid}
 <div class="table-wrap"><table><thead id="thead"></thead><tbody id="tbody"><tr><td>Sign in to load the live schedule.</td></tr></tbody></table></div>
 <script>
 (() => {
-  const BUILD="FILTER-3";
+  const BUILD="FILTER-4";
   const CLIENT_ID="qo3W5ymZkpyWwyOT";
   const PORTAL="https://www.arcgis.com";
   const AUTHORIZE=PORTAL+"/sharing/rest/oauth2/authorize";
@@ -86,9 +86,10 @@ tr{break-inside:avoid}
   const SERVICE_LOCATION_URL=SERVICE_ROOT+"/0";
   const REDIRECT_URI="https://jhyder50.github.io/bristol-permit-router-v2/collections_schedule_oauth.html";
   const ACTIVITY_FIELDS=["OBJECTID","coll_id","parentglobalid","location_address","location_address2","activity_class","activity_type","scheduled_date","can_nums","co_can","dayofweek","account_type","note","activity_status","co_status"].join(",");
-  const PARENT_FIELDS=["OBJECTID","coll_id","GlobalID","location_address","location_address_orig","can_nums","dayofweek","account_type"].join(",");
+  const PARENT_FIELDS="*";
   const COLUMN_DEFS=[
     {key:"address",label:"Address",default:true},
+    {key:"ownerName",label:"Owner Name",default:false},
     {key:"requestType",label:"Request Type",default:false},
     {key:"accountType",label:"Account Type",default:false},
     {key:"activity",label:"Activity Requested",default:true},
@@ -134,13 +135,22 @@ tr{break-inside:avoid}
   function bestCans(a,p){const vals=[];[a.can_nums,a.co_can,p&&p.can_nums].forEach(v=>{const s=clean(v);if(s&&!vals.includes(s))vals.push(s)});return vals.join(", ")}
   function bestDay(a,p){return clean(a.dayofweek)||clean(p&&p.dayofweek)}
   function bestAccountType(a,p){return clean(a.account_type)||clean(p&&p.account_type)}
+  function bestOwnerName(p){
+    if(!p)return"";
+    const candidates=["owner_name","ownername","owner","customer_name","customername","account_name","accountname","property_owner","propertyowner"];
+    for(const k of candidates){if(clean(p[k]))return clean(p[k])}
+    const keys=Object.keys(p);
+    for(const k of keys){const n=k.toLowerCase().replace(/[^a-z0-9]/g,"");if(["ownername","customername","accountname","propertyowner"].includes(n)&&clean(p[k]))return clean(p[k])}
+    return"";
+  }
   function uniqueValues(values){return [...new Set(values.map(clean).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true,sensitivity:"base"}))}
-  function populateSelect(select,values){const previous=select.value;const sorted=uniqueValues(values);select.replaceChildren(new Option("All",""),...sorted.map(v=>new Option(v,v)));if(sorted.includes(previous))select.value=previous;return sorted.length}
-  function populateFiltersFromRows(){const n1=populateSelect(requestTypeFilter,allRows.map(r=>r.requestType));const n2=populateSelect(accountTypeFilter,allRows.map(r=>r.accountType));const n3=populateSelect(collectionDayFilter,allRows.map(r=>r.day));const n4=populateSelect(activityTypeFilter,allRows.map(r=>r.activity));filterDiag.textContent=`Build ${BUILD} · rows ${allRows.length} · filter values ${n1}/${n2}/${n3}/${n4}`}
+  function dayValues(values){const order=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];const vals=[...new Set(values.map(clean).filter(Boolean))];return vals.sort((a,b)=>{const ai=order.findIndex(x=>x.toLowerCase()===a.toLowerCase()),bi=order.findIndex(x=>x.toLowerCase()===b.toLowerCase());if(ai>=0&&bi>=0)return ai-bi;if(ai>=0)return-1;if(bi>=0)return 1;return a.localeCompare(b)})}
+  function populateSelect(select,values,sorter=uniqueValues){const previous=select.value;const sorted=sorter(values);select.replaceChildren(new Option("All",""),...sorted.map(v=>new Option(v,v)));if(sorted.includes(previous))select.value=previous;return sorted.length}
+  function populateFiltersFromRows(){const n1=populateSelect(requestTypeFilter,allRows.map(r=>r.requestType));const n2=populateSelect(accountTypeFilter,allRows.map(r=>r.accountType));const n3=populateSelect(collectionDayFilter,allRows.map(r=>r.day),dayValues);const n4=populateSelect(activityTypeFilter,allRows.map(r=>r.activity));filterDiag.textContent=`Build ${BUILD} · rows ${allRows.length} · filter values ${n1}/${n2}/${n3}/${n4}`}
   function buildFieldPanel(){fieldsPanel.innerHTML=COLUMN_DEFS.map(c=>`<label><input type="checkbox" data-field="${c.key}" ${selectedFields.has(c.key)?"checked":""}> ${esc(c.label)}</label>`).join("");fieldsPanel.querySelectorAll('input[data-field]').forEach(cb=>cb.addEventListener('change',()=>{const key=cb.dataset.field;if(cb.checked)selectedFields.add(key);else selectedFields.delete(key);if(selectedFields.size===0){cb.checked=true;selectedFields.add(key)}renderTable()}))}
   function filteredRows(){return allRows.filter(r=>(!requestTypeFilter.value||r.requestType===requestTypeFilter.value)&&(!accountTypeFilter.value||r.accountType===accountTypeFilter.value)&&(!collectionDayFilter.value||r.day===collectionDayFilter.value)&&(!activityTypeFilter.value||r.activity===activityTypeFilter.value))}
   function renderTable(){const cols=COLUMN_DEFS.filter(c=>selectedFields.has(c.key));const rows=filteredRows();thead.innerHTML='<tr>'+cols.map(c=>`<th>${esc(c.label)}</th>`).join('')+'</tr>';tbody.innerHTML=rows.length?rows.map(r=>'<tr>'+cols.map(c=>`<td>${esc(r[c.key])}</td>`).join('')+'</tr>').join(''):`<tr><td colspan="${cols.length}">No scheduled records match the current filters.</td></tr>`;const active=[];if(requestTypeFilter.value)active.push(`Request Type: ${requestTypeFilter.value}`);if(accountTypeFilter.value)active.push(`Account Type: ${accountTypeFilter.value}`);if(collectionDayFilter.value)active.push(`Collection Day: ${collectionDayFilter.value}`);if(activityTypeFilter.value)active.push(`Activity Type: ${activityTypeFilter.value}`);meta.textContent=`${currentRangeLabel} | Records: ${rows.length}${active.length?" | "+active.join(" | "):""}`}
-  async function loadSchedule(){const r=getRange();if(rangePreset.value==="custom"){if(!r.from||!r.to){status.textContent="Choose both From and To dates.";return}if(r.from>r.to){status.textContent="The From date cannot be after the To date.";return}}if(!await ensureToken()){status.textContent="Sign in to ArcGIS to load the schedule.";return}status.textContent="Loading live schedule and service details…";const activities=await queryLayer(ACTIVITY_URL,{where:makeWhere(r),outFields:ACTIVITY_FIELDS,returnGeometry:"false",orderByFields:"scheduled_date ASC, location_address2 ASC",resultRecordCount:"2000"});const parents=await parentMapFor(activities);allRows=activities.map(f=>{const a=f.attributes||{},p=parents.get(normGuid(a.parentglobalid))||{};return{address:bestAddress(a,p),requestType:clean(a.activity_class),accountType:bestAccountType(a,p),activity:clean(a.activity_type),scheduled:displayIso(arcDate(a.scheduled_date)),cans:bestCans(a,p),day:bestDay(a,p),notes:clean(a.note)}});populateFiltersFromRows();currentRangeLabel=!r.from&&!r.to?"All scheduled records":r.from===r.to?`${r.label}: ${displayIso(r.from)}`:`${r.label}: ${displayIso(r.from)} - ${displayIso(r.to)}`;status.textContent="";renderTable()}
+  async function loadSchedule(){const r=getRange();if(rangePreset.value==="custom"){if(!r.from||!r.to){status.textContent="Choose both From and To dates.";return}if(r.from>r.to){status.textContent="The From date cannot be after the To date.";return}}if(!await ensureToken()){status.textContent="Sign in to ArcGIS to load the schedule.";return}status.textContent="Loading live schedule and service details…";const activities=await queryLayer(ACTIVITY_URL,{where:makeWhere(r),outFields:ACTIVITY_FIELDS,returnGeometry:"false",orderByFields:"scheduled_date ASC, location_address2 ASC",resultRecordCount:"2000"});const parents=await parentMapFor(activities);allRows=activities.map(f=>{const a=f.attributes||{},p=parents.get(normGuid(a.parentglobalid))||{};return{address:bestAddress(a,p),ownerName:bestOwnerName(p),requestType:clean(a.activity_class),accountType:bestAccountType(a,p),activity:clean(a.activity_type),scheduled:displayIso(arcDate(a.scheduled_date)),cans:bestCans(a,p),day:bestDay(a,p),notes:clean(a.note)}});populateFiltersFromRows();currentRangeLabel=!r.from&&!r.to?"All scheduled records":r.from===r.to?`${r.label}: ${displayIso(r.from)}`:`${r.label}: ${displayIso(r.from)} - ${displayIso(r.to)}`;status.textContent="";renderTable()}
   async function handleCallback(){const q=new URLSearchParams(location.search),code=q.get("code"),returnedState=q.get("state");if(!code)return false;const expected=sessionStorage.getItem("collections_oauth_state");if(!expected||returnedState!==expected)throw new Error("OAuth state validation failed.");status.textContent="Completing ArcGIS sign-in…";await exchangeCode(code);history.replaceState({},document.title,REDIRECT_URI);await loadSchedule();return true}
   buildFieldPanel();renderTable();
   rangePreset.addEventListener("change",()=>{customRange.style.display=rangePreset.value==="custom"?"flex":"none";if(accessToken&&rangePreset.value!=="custom")loadSchedule().catch(e=>status.textContent=e.message)});
