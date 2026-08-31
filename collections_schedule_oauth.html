@@ -27,20 +27,20 @@ h1{margin:0 0 4px;font-size:24px}
 .auth{margin-bottom:10px;font-weight:600}
 .status{margin:8px 0 12px;min-height:20px;font-weight:600}
 .table-wrap{overflow-x:auto;width:100%}
-table{width:100%;min-width:1235px;border-collapse:collapse;table-layout:fixed}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
 thead{display:table-header-group}
 th,td{border:1px solid var(--border);padding:6px 8px;vertical-align:top}
 th{background:#e7e7e7;text-align:left;white-space:nowrap;overflow:visible;text-overflow:clip}
 th.col-address,td.col-address{width:240px;min-width:240px;max-width:240px;white-space:normal;overflow-wrap:anywhere}
-th.col-ownerName,td.col-ownerName{width:120px;min-width:120px;white-space:nowrap}
+th.col-ownerName,td.col-ownerName{width:240px;min-width:240px;max-width:240px;white-space:normal;overflow-wrap:anywhere}
 th.col-requestType,td.col-requestType{width:120px;min-width:120px;white-space:nowrap}
 th.col-accountType,td.col-accountType{width:120px;min-width:120px;white-space:nowrap}
 th.col-activity,td.col-activity{width:245px;min-width:245px;max-width:245px;white-space:normal;overflow-wrap:anywhere}
 th.col-status,td.col-status{width:125px;min-width:125px;white-space:nowrap}
 th.col-scheduled,td.col-scheduled{width:125px;min-width:125px;white-space:nowrap}
-th.col-cans,td.col-cans{width:120px;min-width:120px;white-space:nowrap}
+th.col-cans,td.col-cans{width:120px;min-width:120px;max-width:120px;white-space:normal;overflow-wrap:anywhere}
 th.col-day,td.col-day{width:120px;min-width:120px;white-space:nowrap}
-th.col-notes,td.col-notes{width:auto;min-width:385px;white-space:normal;overflow-wrap:anywhere}
+th.col-notes,td.col-notes{width:auto;min-width:260px;white-space:normal;overflow-wrap:anywhere}
 tr{break-inside:avoid}
 @page{size:landscape;margin:.35in}
 @media print{
@@ -48,17 +48,17 @@ tr{break-inside:avoid}
  .toolbar,.filters,.status,.auth{display:none!important}
  h1{font-size:18pt}
  .table-wrap{overflow:visible}
- table{width:100%;min-width:0;table-layout:fixed}
+ table{width:100%;min-width:0!important;table-layout:fixed}
  th,td{font-size:8.25pt;padding:4px 5px}
  th{white-space:nowrap;overflow:visible;text-overflow:clip}
  th.col-address,td.col-address{width:210px;white-space:normal;overflow-wrap:anywhere}
- th.col-ownerName,td.col-ownerName{width:95px}
+ th.col-ownerName,td.col-ownerName{width:210px;white-space:normal;overflow-wrap:anywhere}
  th.col-requestType,td.col-requestType{width:105px}
  th.col-accountType,td.col-accountType{width:105px}
- th.col-activity,td.col-activity{width:205px;white-space:normal}
+ th.col-activity,td.col-activity{width:205px;white-space:normal;overflow-wrap:anywhere}
  th.col-status,td.col-status{width:110px}
  th.col-scheduled,td.col-scheduled{width:110px}
- th.col-cans,td.col-cans{width:105px}
+ th.col-cans,td.col-cans{width:105px;white-space:normal;overflow-wrap:anywhere}
  th.col-day,td.col-day{width:105px}
  th.col-notes,td.col-notes{width:auto;white-space:normal;min-width:180px}
 }
@@ -127,6 +127,7 @@ tr{break-inside:avoid}
     {key:"day",label:"Collection Day",default:true},
     {key:"notes",label:"Notes",default:true}
   ];
+  const COLUMN_WIDTHS={address:240,ownerName:240,requestType:120,accountType:120,activity:245,status:125,scheduled:125,cans:120,day:120};
   const $=id=>document.getElementById(id);
   const rangePreset=$("rangePreset"),customRange=$("customRange"),fromDate=$("fromDate"),toDate=$("toDate");
   const signInBtn=$("signInBtn"),signOutBtn=$("signOutBtn"),refreshBtn=$("refreshBtn"),printBtn=$("printBtn"),exportBtn=$("exportBtn");
@@ -176,7 +177,7 @@ tr{break-inside:avoid}
   function buildFieldPanel(){fieldsPanel.innerHTML=COLUMN_DEFS.map(c=>`<label><input type="checkbox" data-field="${c.key}" ${selectedFields.has(c.key)?"checked":""}> ${esc(c.label)}</label>`).join("");fieldsPanel.querySelectorAll('input[data-field]').forEach(cb=>cb.addEventListener('change',()=>{const key=cb.dataset.field;if(cb.checked)selectedFields.add(key);else selectedFields.delete(key);if(selectedFields.size===0){cb.checked=true;selectedFields.add(key)}renderTable()}))}
   function filteredRows(){return allRows.filter(r=>(!activityStatusFilter.value||r.status===activityStatusFilter.value)&&(!requestTypeFilter.value||r.requestType===requestTypeFilter.value)&&(!accountTypeFilter.value||r.accountType===accountTypeFilter.value)&&(!collectionDayFilter.value||r.day===collectionDayFilter.value)&&(!activityTypeFilter.value||r.activity===activityTypeFilter.value))}
   function visibleColumns(){return COLUMN_DEFS.filter(c=>selectedFields.has(c.key))}
-  function renderTable(){const cols=visibleColumns(),rows=filteredRows();thead.innerHTML='<tr>'+cols.map(c=>`<th class="col-${c.key}">${esc(c.label)}</th>`).join('')+'</tr>';tbody.innerHTML=rows.length?rows.map(r=>'<tr>'+cols.map(c=>`<td class="col-${c.key}" title="${esc(r[c.key]).replaceAll('<br>',' ')}">${esc(r[c.key])}</td>`).join('')+'</tr>').join(''):`<tr><td colspan="${cols.length}">No activity records match the current filters.</td></tr>`;const active=[];if(activityStatusFilter.value)active.push(`Activity Status: ${activityStatusFilter.value}`);if(requestTypeFilter.value)active.push(`Request Type: ${requestTypeFilter.value}`);if(accountTypeFilter.value)active.push(`Account Type: ${accountTypeFilter.value}`);if(collectionDayFilter.value)active.push(`Collection Day: ${collectionDayFilter.value}`);if(activityTypeFilter.value)active.push(`Activity Requested: ${activityTypeFilter.value}`);meta.textContent=`${currentRangeLabel} | Records: ${rows.length.toLocaleString()}${active.length?" | "+active.join(" | "):""}`}
+  function renderTable(){const cols=visibleColumns(),rows=filteredRows();const table=thead.closest("table");const fixedWidth=cols.filter(c=>c.key!=="notes").reduce((sum,c)=>sum+(COLUMN_WIDTHS[c.key]||120),0);table.style.minWidth=`${fixedWidth+(cols.some(c=>c.key==="notes")?260:0)}px`;thead.innerHTML='<tr>'+cols.map(c=>`<th class="col-${c.key}">${esc(c.label)}</th>`).join('')+'</tr>';tbody.innerHTML=rows.length?rows.map(r=>'<tr>'+cols.map(c=>`<td class="col-${c.key}" title="${esc(r[c.key]).replaceAll('<br>',' ')}">${esc(r[c.key])}</td>`).join('')+'</tr>').join(''):`<tr><td colspan="${cols.length}">No activity records match the current filters.</td></tr>`;const active=[];if(activityStatusFilter.value)active.push(`Activity Status: ${activityStatusFilter.value}`);if(requestTypeFilter.value)active.push(`Request Type: ${requestTypeFilter.value}`);if(accountTypeFilter.value)active.push(`Account Type: ${accountTypeFilter.value}`);if(collectionDayFilter.value)active.push(`Collection Day: ${collectionDayFilter.value}`);if(activityTypeFilter.value)active.push(`Activity Requested: ${activityTypeFilter.value}`);meta.textContent=`${currentRangeLabel} | Records: ${rows.length.toLocaleString()}${active.length?" | "+active.join(" | "):""}`}
   function excelEscape(v){return esc(v).replaceAll("<br>","<br/>")}
   function exportExcel(){const cols=visibleColumns(),rows=filteredRows();if(!rows.length){status.textContent="No records match the current filters to export.";return}const table=`<table border="1"><thead><tr>${cols.map(c=>`<th>${excelEscape(c.label)}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>${cols.map(c=>`<td>${excelEscape(r[c.key])}</td>`).join("")}</tr>`).join("")}</tbody></table>`;const html=`<!doctype html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse;font-family:Arial,sans-serif}th,td{border:1px solid #666;padding:5px;vertical-align:top}th{font-weight:bold;background:#e7e7e7}</style></head><body><h2>Collections Scheduled Work</h2><p>${excelEscape(meta.textContent)}</p>${table}</body></html>`;const blob=new Blob(["\ufeff",html],{type:"application/vnd.ms-excel;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`Collections_Scheduled_Work_${todayIso()}.xls`;document.body.appendChild(a);a.click();const href=a.href;a.remove();setTimeout(()=>URL.revokeObjectURL(href),1000);status.textContent=`Exported ${rows.length.toLocaleString()} records to Excel.`}
 
