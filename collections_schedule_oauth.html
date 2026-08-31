@@ -180,7 +180,22 @@ tr{break-inside:avoid}
   function exportExcel(){const cols=visibleColumns(),rows=filteredRows();if(!rows.length){status.textContent="No records match the current filters to export.";return}const table=`<table border="1"><thead><tr>${cols.map(c=>`<th>${excelEscape(c.label)}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>${cols.map(c=>`<td>${excelEscape(r[c.key])}</td>`).join("")}</tr>`).join("")}</tbody></table>`;const html=`<!doctype html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse;font-family:Arial,sans-serif}th,td{border:1px solid #666;padding:5px;vertical-align:top}th{font-weight:bold;background:#e7e7e7}</style></head><body><h2>Collections Scheduled Work</h2><p>${excelEscape(meta.textContent)}</p>${table}</body></html>`;const blob=new Blob(["\ufeff",html],{type:"application/vnd.ms-excel;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`Collections_Scheduled_Work_${todayIso()}.xls`;document.body.appendChild(a);a.click();const href=a.href;a.remove();setTimeout(()=>URL.revokeObjectURL(href),1000);status.textContent=`Exported ${rows.length} record${rows.length===1?"":"s"} to Excel.`}
 
   async function loadSchedule(){const r=getRange();if(rangePreset.value==="custom"){if(!r.from||!r.to){status.textContent="Choose both From and To dates.";return}if(r.from>r.to){status.textContent="The From date cannot be after the To date.";return}}if(!await ensureToken()){status.textContent="Sign in to ArcGIS to load the schedule.";return}status.textContent="Loading collection activity and service details…";const activities=await queryLayer(ACTIVITY_URL,{where:makeWhere(r),outFields:ACTIVITY_FIELDS,returnGeometry:"false",orderByFields:"scheduled_date ASC, location_address2 ASC",resultRecordCount:"2000"});const parents=await parentMapFor(activities);allRows=activities.map(f=>{const a=f.attributes||{},p=parents.get(normGuid(a.parentglobalid))||{};return{address:bestAddress(a,p),ownerName:bestOwnerName(p),requestType:clean(a.activity_class),accountType:bestAccountType(a,p),activity:clean(a.activity_type),status:clean(a.activity_status),scheduled:displayIso(arcDate(a.scheduled_date)),cans:bestCans(a,p),day:bestDay(a,p),notes:clean(a.note)}});populateFiltersFromRows();currentRangeLabel=!r.from&&!r.to?"All activity records":r.from===r.to?`${r.label}: ${displayIso(r.from)}`:`${r.label}: ${displayIso(r.from)} - ${displayIso(r.to)}`;status.textContent="";renderTable()}
-  async function handleCallback(){const q=new URLSearchParams(location.search),code=q.get("code"),returnedState=q.get("state");if(!code)return false;const expected=sessionStorage.getItem("collections_oauth_state");if(!expected||returnedState!==expected)throw new Error("OAuth state validation failed.");status.textContent="Completing ArcGIS sign-in…";await exchangeCode(code);history.replaceState({},document.title,REDIRECT_URI);await loadSchedule();return true}
+  async function handleCallback(){
+    const q=new URLSearchParams(location.search),code=q.get("code"),returnedState=q.get("state");
+    if(!code)return false;
+    if(!q.get("cbv")){
+      q.set("cbv",String(Date.now()));
+      location.replace(location.pathname+"?"+q.toString());
+      return true;
+    }
+    const expected=sessionStorage.getItem("collections_oauth_state");
+    if(!expected||returnedState!==expected)throw new Error("OAuth state validation failed.");
+    status.textContent="Completing ArcGIS sign-in…";
+    await exchangeCode(code);
+    history.replaceState({},document.title,REDIRECT_URI);
+    await loadSchedule();
+    return true;
+  }
   buildFieldPanel();renderTable();
   rangePreset.addEventListener("change",()=>{customRange.style.display=rangePreset.value==="custom"?"flex":"none";if(accessToken&&rangePreset.value!=="custom")loadSchedule().catch(e=>status.textContent=e.message)});
   [fromDate,toDate].forEach(el=>el.addEventListener('change',()=>{if(accessToken&&rangePreset.value==='custom'&&fromDate.value&&toDate.value)loadSchedule().catch(e=>status.textContent=e.message)}));
