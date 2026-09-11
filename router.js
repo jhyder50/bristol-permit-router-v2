@@ -396,11 +396,24 @@
       }
 
       formEl.classList.add("hidden");
+
+      const creatingStartedAt = Date.now();
       await waitForProjectNumber(data);
+
+      // Keep the success/status message on screen briefly even when Azure
+      // returns the project number almost instantly.
+      const minimumCreatingMs = 1200;
+      const creatingElapsedMs = Date.now() - creatingStartedAt;
+      if (creatingElapsedMs < minimumCreatingMs) {
+        await new Promise(resolve =>
+          window.setTimeout(resolve, minimumCreatingMs - creatingElapsedMs)
+        );
+      }
 
       const destination = buildDestination(routeKey);
       const label = config.routes[routeKey].label;
       setStatus(`Opening ${label}…`);
+      await new Promise(resolve => window.setTimeout(resolve, 350));
       sessionStorage.removeItem("bristolPermitRoute");
       window.location.replace(destination);
     } catch (error) {
